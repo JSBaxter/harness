@@ -94,11 +94,12 @@ Two mechanisms, both mandatory for visual PRs:
   overwrite, assert valid PNG). Deterministic rendering means the file only
   changes when the visuals change — the PR diff always carries a current
   picture.
-- **Screenshots embedded in the PR body** (per /ship step 7): 1-3 shots of
+- **Screenshots committed with the PR** (per /ship step 7): 1-3 shots of
   the states this PR changed, committed under `docs/screenshots/<branch>/`,
-  embedded via `blob/<branch>/...?raw=true` URLs with one-line captions.
-  The reviewer-human should understand what changed visually without
-  checking out the branch.
+  linked (not embedded — inline embeds don't render on private repos) from
+  a `## Screenshots` section with one-line captions; they render inline in
+  the Files-changed tab as image diffs. The reviewer-human should
+  understand what changed visually without checking out the branch.
 
 ## 5. Style defaults that photograph well
 
