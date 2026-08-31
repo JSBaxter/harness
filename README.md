@@ -37,7 +37,13 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
 4. **Gate** → every PR runs `claude-review.yml`: fresh-context reviewer →
    fixer applies Important findings → re-review, bounded rounds; result lands
    as the `claude-review` status. Timeout/no-consensus → `needs-human` label,
-   failing status. You are the only approver of record.
+   failing status. Merging is the human act (agents are hook-blocked from
+   `gh pr merge`; on a solo account you can't formally approve your own PRs).
+5. **Feedback** → leave PR review/inline comments mentioning `@claude`:
+   `claude-fix.yml` collects all unresolved human comments, does one bounded
+   round of work, re-runs the reviewer loop, re-stamps `claude-review` on the
+   new head, and replies with a per-comment summary. One human comment = one
+   round; the workflows never trigger each other.
 5. **React** → Claude Code Routines (claude.ai/code/routines) handle non-gating
    event work on Anthropic compute — zero Actions minutes.
 
