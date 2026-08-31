@@ -24,8 +24,10 @@
   `../harness/plugins/jsb-harness/skills/<name>/SKILL.md` and follow it,
   noting "followed /<name> from source" in your PR body. Never improvise a
   substitute procedure silently.
-- `gh` is not installed in cloud containers — use the GitHub MCP tools
-  (e.g. `create_pull_request`) where a skill says `gh ...`.
+- `gh` may or may not be present in cloud containers (newer images
+  pre-install it; auth flows through the proxy automatically). Check with
+  `command -v gh`; if absent, use the GitHub MCP tools (e.g.
+  `create_pull_request`) where a skill says `gh ...`.
 - You cannot set commit statuses or check runs from a cloud session (the
   agent proxy blocks those writes). Don't try; the Actions gate stamps the
   status. Report state via PR comments only.

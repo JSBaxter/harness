@@ -28,16 +28,21 @@ else. Every environment resolves the same source:
 - **Developing skills**: `claude --plugin-dir plugins/jsb-harness` is the
   only sanctioned way to run unpushed skills. Skill changes ship via
   branch → PR → merge like everything else.
-- **Verified gaps (2026-08-31, live-probed twice)**: the plugin LOADER
-  does not materialize this private marketplace outside local machines —
-  GitHub Actions (claude-code-action#850) and cloud sessions (repo
-  settings pointer read, but `synced/` stays empty even when the
-  marketplace repo is reachable; loader appears keyed to account-level
-  claude.ai plugin sync, unconfirmed). **Sanctioned cloud mode instead:**
-  configure cloud sessions with `JSBaxter/harness` as an additional repo —
-  it clones into the workspace and agents follow skills FROM SOURCE
-  (live main, no copies; see the template CLAUDE.md cloud section). Cloud
-  containers also lack `gh` (use GitHub MCP tools).
+- **Verified gaps (2026-08-31, live-probed twice + researched)**: plugins
+  do NOT auto-install in cloud/headless sessions from repo settings — the
+  installer needs an interactive trust dialog that headless sessions
+  can't show; silently ignored (upstream #32606, closed not-planned).
+  The `synced/` mechanism delivers only claude.ai ACCOUNT-level plugins
+  (Customize → Plugins), and personal accounts cannot add PRIVATE
+  marketplaces there (server-side sync is unauthenticated, #61271); the
+  only private path is org-level distribution via the Claude GitHub App.
+  **Sanctioned cloud mode:** configure cloud sessions with
+  `JSBaxter/harness` as an additional repo — agents follow skills FROM
+  SOURCE (live main, no copies; template CLAUDE.md cloud section).
+  Possible future upgrade: `CLAUDE_CODE_PLUGIN_SEED_DIR` pre-seeded in
+  the cloud environment setup script (documented; untested here).
+  `gh` in cloud: newer images pre-install it (proxy injects auth);
+  older containers lack it — skills fall back to GitHub MCP tools.
 - **Cloud sessions cannot write commit statuses** (blanket 403 on
   /statuses and /check-runs; status READS hit a proxy bug, HTTP 502).
   Verified by live probe. The review gate therefore lives in GitHub

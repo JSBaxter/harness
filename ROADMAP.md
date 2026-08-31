@@ -53,6 +53,10 @@ Exit criteria: kick off a task from the phone, review the PR next morning.
 - [ ] Template-repo sync skill or CI: `templates/project/` →
       `JSBaxter/project-template` automatically on push to this repo
 - [ ] Try beads (`bd`) for cross-repo/cross-week task memory; adopt or drop
+- [ ] Try `CLAUDE_CODE_PLUGIN_SEED_DIR` in a cloud environment setup script
+      (documented path to real slash-commands in cloud; ours is untested)
+- [ ] File upstream issues: /statuses write-403 + /status read-502 from the
+      cloud GitHub proxy (our probes are ahead of the public record)
 - [ ] Review `/usage` + `/insights` after a few weeks of real load; only
       revisit external observability (SigNoz/Langfuse) if the built-ins
       leave real questions unanswered
