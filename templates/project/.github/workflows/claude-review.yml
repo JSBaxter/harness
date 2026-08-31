@@ -67,40 +67,43 @@ jobs:
 
             Then finalize — this part is mandatory even if you are unsure:
             - Push any commits you made.
-            - FINAL_SHA=$(git rev-parse HEAD)
-            - If approved:
-              gh api repos/${{ github.repository }}/statuses/$FINAL_SHA \
-                -f state=success -f context=claude-review \
-                -f description="approved after N round(s)"
-              Also remove the needs-human label if present.
-            - If 3 rounds passed without APPROVE (or you could not safely fix):
-              gh api repos/${{ github.repository }}/statuses/$FINAL_SHA \
-                -f state=failure -f context=claude-review \
-                -f description="no consensus after 3 rounds - needs human"
-              gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force
-              gh pr edit ${{ github.event.pull_request.number }} --add-label needs-human
-              Post ONE PR comment listing the unresolved Important findings and,
-              for each, why it was not fixed (disputed / risky / out of scope).
-            - Minor findings never block: mention them in a PR comment at most
-              once; do not fix them and do not loop on them.
+            - Write two files in the repo root (do NOT commit or push them):
+              * review-verdict.txt — exactly APPROVE or NEEDS_HUMAN
+              * review-summary.md — short markdown: rounds run, findings fixed,
+                Minor findings noted, and (if NEEDS_HUMAN) each unresolved
+                Important finding with why it wasn't fixed (disputed / risky /
+                out of scope).
+            - Do NOT set commit statuses, labels, or comments yourself — your
+              token can't write statuses; a later workflow step publishes your
+              verdict with the right token.
+            - Minor findings never block: note them in review-summary.md; do
+              not fix them and do not loop on them.
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # Timeout/crash backstop: if this run died before stamping a status,
-      # fail closed and flag for a human instead of leaving "expected" limbo.
-      - name: Ensure status exists
+      # Publishes Claude's verdict with the workflow token (statuses: write).
+      # Doubles as the crash/timeout backstop: a missing verdict file fails
+      # closed with needs-human instead of leaving "expected" limbo.
+      - name: Publish verdict
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           sha=$(git rev-parse HEAD)
-          state=$(gh api "repos/${{ github.repository }}/commits/$sha/statuses" \
-            --jq '[.[] | select(.context=="claude-review")][0].state' 2>/dev/null || echo "")
-          if [ -z "$state" ] || [ "$state" = "null" ]; then
+          verdict=$(head -c 32 review-verdict.txt 2>/dev/null | tr -d '[:space:]' || true)
+          if [ "$verdict" = "APPROVE" ]; then
+            gh api "repos/${{ github.repository }}/statuses/$sha" \
+              -f state=success -f context=claude-review \
+              -f description="approved by review loop"
+            gh pr edit "$PR" --remove-label needs-human 2>/dev/null || true
+          else
             gh api "repos/${{ github.repository }}/statuses/$sha" \
               -f state=failure -f context=claude-review \
-              -f description="review run did not complete (timeout?) - needs human"
+              -f description="verdict: ${verdict:-run did not complete} - needs human"
             gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force || true
             gh pr edit "$PR" --add-label needs-human || true
+          fi
+          if [ -s review-summary.md ]; then
+            gh pr comment "$PR" --body-file review-summary.md || true
           fi
