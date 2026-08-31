@@ -1,0 +1,24 @@
+# --- ~/.gitconfig (relevant parts) ------------------------------------------
+# Default identity applies everywhere; later includeIf blocks override inside
+# their directory trees. Trailing slash on gitdir: matters.
+#
+# [user]
+#     name = Your Name
+#     email = you@example.com
+#
+# [includeIf "gitdir:~/Documents/repos/stealth/"]
+#     path = ~/.config/git/identity-stealth
+
+# --- ~/.config/git/identity-stealth ------------------------------------------
+# Real values live only in this local file, never in a repo.
+#
+# [user]
+#     name = STEALTH_NAME
+#     email = STEALTH_EMAIL
+#
+# Route HTTPS auth through the stealth gh login (note the leading empty
+# helper line, which clears inherited helpers for this scope):
+#
+# [credential "https://github.com"]
+#     helper =
+#     helper = "!GH_CONFIG_DIR=~/.config/gh-stealth /usr/bin/gh auth git-credential"

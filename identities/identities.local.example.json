@@ -1,0 +1,16 @@
+{
+  "identities": {
+    "primary": {
+      "ghUser": "PRIMARY_GITHUB_USERNAME",
+      "email": "PRIMARY_COMMIT_EMAIL",
+      "ghConfigDir": "",
+      "dirs": ["~/Documents/repos"]
+    },
+    "stealth": {
+      "ghUser": "PLACEHOLDER_USERNAME",
+      "email": "PLACEHOLDER_EMAIL",
+      "ghConfigDir": "~/.config/gh-stealth",
+      "dirs": ["~/Documents/repos/stealth"]
+    }
+  }
+}

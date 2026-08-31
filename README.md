@@ -23,6 +23,8 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
 | `settings/settings.json` | Shared settings: agent teams on, worktree defaults, safe-command allowlist |
 | `templates/project/` | Contents for the GitHub **template repo**: CLAUDE.md, review workflow, ruleset, ADR seed, specs scaffold |
 | `routines/` | Prompt templates for Claude Code Routines (cloud sessions on GitHub events) |
+| `identities/` | Multi-account machinery: directory = identity; real values live only in local untracked files (see `identities/README.md`) |
+| `bin/gh-as` | Run `gh` pinned to a specific identity's login |
 
 ## The pipeline
 
