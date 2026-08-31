@@ -16,4 +16,12 @@ if printf '%s' "$command" | grep -qE 'git\s+push\b.*\s(origin\s+)?(main|master)\
   exit 2
 fi
 
+# Merging is the human gate. On solo accounts the author can't formally
+# approve their own PR, so the ruleset doesn't require reviews — which means
+# agents must never merge. The human merges via the GitHub UI.
+if printf '%s' "$command" | grep -qE '(^|[;&|(]\s*)gh\s+pr\s+merge\b'; then
+  echo "Blocked: merging PRs is human-only. Report the PR as ready and stop." >&2
+  exit 2
+fi
+
 exit 0
