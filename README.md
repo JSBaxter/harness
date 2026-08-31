@@ -28,15 +28,16 @@ else. Every environment resolves the same source:
 - **Developing skills**: `claude --plugin-dir plugins/jsb-harness` is the
   only sanctioned way to run unpushed skills. Skill changes ship via
   branch → PR → merge like everything else.
-- **Verified gaps (2026-08-31, live-probed)**: a PRIVATE marketplace is
-  unreachable from BOTH non-local environments — GitHub Actions
-  (claude-code-action#850) and cloud sessions/routines (the session proxy
-  pins GitHub access to the session's configured repos; other private
-  repos 403). The settings pointer is read but the marketplace never
-  clones. Consequence: private-marketplace skills only propagate to local
-  sessions; full propagation requires the plugin to be publicly
-  fetchable (see split-repo note below) or vendored (rejected: copies
-  drift).
+- **Verified gaps (2026-08-31, live-probed twice)**: the plugin LOADER
+  does not materialize this private marketplace outside local machines —
+  GitHub Actions (claude-code-action#850) and cloud sessions (repo
+  settings pointer read, but `synced/` stays empty even when the
+  marketplace repo is reachable; loader appears keyed to account-level
+  claude.ai plugin sync, unconfirmed). **Sanctioned cloud mode instead:**
+  configure cloud sessions with `JSBaxter/harness` as an additional repo —
+  it clones into the workspace and agents follow skills FROM SOURCE
+  (live main, no copies; see the template CLAUDE.md cloud section). Cloud
+  containers also lack `gh` (use GitHub MCP tools).
 - **Cloud sessions cannot write commit statuses** (blanket 403 on
   /statuses and /check-runs; status READS hit a proxy bug, HTTP 502).
   Verified by live probe. The review gate therefore lives in GitHub

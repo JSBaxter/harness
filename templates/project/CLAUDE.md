@@ -15,6 +15,21 @@
 - **Tests run before every PR.** Test command: `TEST_COMMAND_HERE`.
   Lint command: `LINT_COMMAND_HERE`.
 
+## Cloud sessions (claude.ai/code) — read this first
+
+- The harness skills referenced here (`/ship`, `/adr`, `/spec`, …) may not
+  be installed as slash commands in cloud containers. If `ListPlugins` is
+  empty: the session should be configured with the `JSBaxter/harness` repo
+  alongside this one — then READ the skill you need from
+  `../harness/plugins/jsb-harness/skills/<name>/SKILL.md` and follow it,
+  noting "followed /<name> from source" in your PR body. Never improvise a
+  substitute procedure silently.
+- `gh` is not installed in cloud containers — use the GitHub MCP tools
+  (e.g. `create_pull_request`) where a skill says `gh ...`.
+- You cannot set commit statuses or check runs from a cloud session (the
+  agent proxy blocks those writes). Don't try; the Actions gate stamps the
+  status. Report state via PR comments only.
+
 ## Layout
 
 - `specs/` — living specs: current intended behavior + pending deltas
