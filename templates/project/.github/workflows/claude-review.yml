@@ -23,8 +23,12 @@ concurrency:
 
 jobs:
   review:
-    # Skip cleanly (green) when the triggering push came from Claude itself.
-    if: github.actor != 'claude[bot]' && !github.event.pull_request.draft
+    # Skip cleanly (green) when the triggering push came from any bot —
+    # Claude's own fix-pushes can surface as claude[bot] OR github-actions
+    # depending on the credential used; both already stamped their head.
+    if: >-
+      !endsWith(github.actor, '[bot]') && github.actor != 'github-actions'
+      && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -92,6 +96,17 @@ jobs:
         run: |
           sha=$(git rev-parse HEAD)
           verdict=$(head -c 32 review-verdict.txt 2>/dev/null | tr -d '[:space:]' || true)
+          # Never clobber an existing verdict with a crash-backstop failure:
+          # if this run produced no verdict but the sha already has one
+          # (e.g. this run was rejected as a bot-actor duplicate), keep it.
+          if [ -z "$verdict" ]; then
+            existing=$(gh api "repos/${{ github.repository }}/commits/$sha/statuses" \
+              --jq '[.[] | select(.context=="claude-review")][0].state' 2>/dev/null || echo "")
+            if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+              echo "keeping existing claude-review=$existing on $sha"
+              exit 0
+            fi
+          fi
           if [ "$verdict" = "APPROVE" ]; then
             gh api "repos/${{ github.repository }}/statuses/$sha" \
               -f state=success -f context=claude-review \

@@ -41,7 +41,11 @@ harness checkout (`templates/project/`) into a fresh repo.
    push to main. This must happen before the ruleset lands — the ruleset
    requires PRs for main with no admin bypass, so a later direct push would
    block (by design).
-4. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
+4. Enable branch auto-delete — REQUIRED for stacked PRs to retarget on merge:
+   ```bash
+   gh-as <identity> repo edit <owner>/<name> --delete-branch-on-merge
+   ```
+5. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
    ```bash
    gh-as <identity> api repos/<owner>/<name>/rulesets --method POST \
      --input <harness-repo>/templates/ruleset.json
