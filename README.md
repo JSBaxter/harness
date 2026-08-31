@@ -6,7 +6,7 @@ Everything runs on a Claude Max subscription — no API billing anywhere.
 ## Install (any machine)
 
 ```bash
-git clone git@github.com:OWNER/harness ~/Documents/repos/harness
+git clone https://github.com/JSBaxter/harness ~/Documents/repos/harness
 cd ~/Documents/repos/harness && ./install.sh
 ```
 
@@ -41,8 +41,9 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
 
 ## Setup that lives outside this repo (once per account)
 
-- **Template repo**: create `OWNER/project-template` from `templates/project/`
-  and mark it as a template repo on GitHub.
+- **Template repo**: `JSBaxter/project-template` (created 2026-08-31 from
+  `templates/project/`; when the template contents change here, sync them to
+  that repo).
 - **Claude GitHub app**: `/install-github-app` in any repo once;
   `claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN` secret per repo
   (`/new-experiment` step 4 automates the per-repo part). Known wart: the OAuth
