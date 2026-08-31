@@ -26,19 +26,20 @@ task; don't open PRs any other way.
    choice? If yes, run /adr before opening the PR.
 6. **Commit hygiene** — commits should be small and each message should say why,
    not just what. Squash fixups.
-7. **Frontend/visual changes: screenshots with the PR.** Render 1-3
+7. **Frontend/visual changes: screenshots in the PR body.** Render 1-3
    deterministic screenshots of the key states this PR changed (use the
    project's shot helper), commit them under `docs/screenshots/<branch>/`,
-   and add a `## Screenshots` section to the PR body with a one-line
-   caption per shot saying what to look at.
-   - **Private repos** (the default): inline `![]()` embeds DO NOT render
-     (GitHub's proxy can't fetch private raw URLs — verified 2026-08-31).
-     Use plain links to the blob pages instead, and note that the
-     committed PNGs render inline in the **Files changed** tab — that's
-     the primary review surface (image diffs show before/after).
-   - Public repos only: `![caption](.../blob/<branch>/<path>?raw=true)`
-     embeds work.
-   Show the changed state, not the idle page.
+   and embed each in a `## Screenshots` section with a one-line caption
+   saying what to look at:
+   ```markdown
+   ![caption](https://github.com/<owner>/<repo>/blob/<branch>/docs/screenshots/<branch>/<name>.png?raw=true)
+   ```
+   Works on private repos (verified 2026-08-31, correctly this time —
+   an earlier "doesn't render" conclusion was actually a missing file).
+   Before embedding, VERIFY the file is on the remote:
+   `gh api repos/<o>/<r>/contents/<path>?ref=<branch>` — `git add -A`
+   silently skips gitignored paths, and a broken embed looks identical to
+   an unsupported one. Show the changed state, not the idle page.
 8. **Open the PR**:
    ```bash
    gh pr create --title "..." --body "..." --base <default-branch>
