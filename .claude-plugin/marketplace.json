@@ -1,0 +1,14 @@
+{
+  "name": "jsb-harness",
+  "owner": {
+    "name": "James Baxter",
+    "email": "james@jsbaxter.dev"
+  },
+  "plugins": [
+    {
+      "name": "jsb-harness",
+      "source": "./plugins/jsb-harness",
+      "description": "Portable multi-agent continuous-development harness: specs, ADRs, experiments, review loop, dispatch"
+    }
+  ]
+}

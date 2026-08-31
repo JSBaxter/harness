@@ -1,0 +1,9 @@
+{
+  "name": "jsb-harness",
+  "version": "0.1.0",
+  "description": "James's portable multi-agent dev harness: living specs, ADRs, scratch experiments, agent review loop, fleet dispatch",
+  "author": {
+    "name": "James Baxter",
+    "email": "james@jsbaxter.dev"
+  }
+}

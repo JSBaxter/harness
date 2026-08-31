@@ -1,0 +1,99 @@
+# Agent review gate: fresh-context reviewer -> fixer -> re-review, bounded.
+#
+# Design notes (don't simplify these away):
+# - The whole loop runs INSIDE one claude-code-action invocation. Reviewer
+#   freshness comes from spawning a new read-only `reviewer` subagent per round
+#   (.claude/agents/reviewer.md), so fix-pushes never ping-pong CI runs.
+# - The required check is the `claude-review` COMMIT STATUS this run stamps on
+#   the final head SHA — not the workflow's own check run. This matters: when
+#   the run pushes fixes, the bot-triggered `synchronize` event is skipped by
+#   the actor guard below, so a check-run-based gate would never turn green on
+#   the new head (claude-code-action issue #1299).
+# - Termination: 3 review rounds max + --max-turns + timeout-minutes +
+#   concurrency group. No consensus => failing status + needs-human label.
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip cleanly (green) when the triggering push came from Claude itself.
+    if: github.actor != 'claude[bot]' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      statuses: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Review-fix loop
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
+          prompt: |
+            You are the review gate for PR #${{ github.event.pull_request.number }}
+            (base: ${{ github.event.pull_request.base.ref }}). You are the FIXER;
+            you never judge your own work — judging is done by the `reviewer`
+            subagent, spawned FRESH each round so it never sees the reasoning
+            behind the code it reviews.
+
+            Loop, at most 3 rounds:
+            1. Spawn the `reviewer` agent on the diff
+               (`git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`).
+            2. If VERDICT is APPROVE: exit the loop.
+            3. Otherwise fix ONLY the Important findings — smallest correct fix,
+               no opportunistic refactoring. Run the project's tests
+               (see CLAUDE.md). Commit with message prefix "review-fix:".
+            4. Next round.
+
+            Then finalize — this part is mandatory even if you are unsure:
+            - Push any commits you made.
+            - FINAL_SHA=$(git rev-parse HEAD)
+            - If approved:
+              gh api repos/${{ github.repository }}/statuses/$FINAL_SHA \
+                -f state=success -f context=claude-review \
+                -f description="approved after N round(s)"
+              Also remove the needs-human label if present.
+            - If 3 rounds passed without APPROVE (or you could not safely fix):
+              gh api repos/${{ github.repository }}/statuses/$FINAL_SHA \
+                -f state=failure -f context=claude-review \
+                -f description="no consensus after 3 rounds - needs human"
+              gh pr edit ${{ github.event.pull_request.number }} --add-label needs-human
+              Post ONE PR comment listing the unresolved Important findings and,
+              for each, why it was not fixed (disputed / risky / out of scope).
+            - Minor findings never block: mention them in a PR comment at most
+              once; do not fix them and do not loop on them.
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Timeout/crash backstop: if this run died before stamping a status,
+      # fail closed and flag for a human instead of leaving "expected" limbo.
+      - name: Ensure status exists
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          state=$(gh api "repos/${{ github.repository }}/commits/$sha/statuses" \
+            --jq '[.[] | select(.context=="claude-review")][0].state' 2>/dev/null || echo "")
+          if [ -z "$state" ] || [ "$state" = "null" ]; then
+            gh api "repos/${{ github.repository }}/statuses/$sha" \
+              -f state=failure -f context=claude-review \
+              -f description="review run did not complete (timeout?) - needs human"
+            gh pr edit "$PR" --add-label needs-human || true
+          fi
