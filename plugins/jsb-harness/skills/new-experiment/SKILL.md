@@ -43,10 +43,14 @@ harness checkout (`templates/project/`) into a fresh repo.
 4. Add the `CLAUDE_CODE_OAUTH_TOKEN` secret so the review workflow can run
    (the token is Anthropic-side auth — the same one works for every identity):
    ```bash
-   gh-as <identity> secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<name> --body "$(claude setup-token 2>/dev/null || true)"
+   gh-as <identity> secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<name> \
+     < ~/.claude/claude-code-oauth-token
    ```
-   If `claude setup-token` requires interaction, tell the user to run it
-   themselves and set the secret manually — do not skip this silently.
+   The token file is created once per machine by the user
+   (`claude setup-token`, saved to `~/.claude/claude-code-oauth-token`,
+   mode 600). If the file is missing, tell the user to run `claude setup-token`
+   and save it there — do not skip this step silently, and never echo the
+   token into logs or chat.
 5. Fill in the templated files: project name in `CLAUDE.md`, the description in
    `README.md`, and an initial spec stub in `specs/` if the user described the idea.
 6. Commit and push the personalization, then report: repo URL, local path, and
