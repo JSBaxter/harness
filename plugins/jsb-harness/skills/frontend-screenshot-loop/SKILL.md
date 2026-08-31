@@ -68,8 +68,12 @@ printing any console errors). Loop:
 5. Screenshot MULTIPLE states, not just the idle one — bugs live in the
    mid-animation states
 
-`screenshots/` is gitignored; version the numbered iterations locally so you
-can compare.
+Ignore scratch shots with a ROOT-ANCHORED `/screenshots/` gitignore entry —
+an unanchored `screenshots/` also swallows `docs/screenshots/` (the shipped
+PR screenshots) and git will silently skip them on `git add -A`. After
+committing shipped screenshots, verify they're actually on the remote:
+`gh api repos/<o>/<r>/contents/<path>?ref=<branch>` — a 404 there means the
+PR body links will 404 too.
 
 ## 3. The test stack
 
