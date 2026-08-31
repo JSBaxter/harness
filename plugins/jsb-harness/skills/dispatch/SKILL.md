@@ -33,6 +33,15 @@ repo's ready queue.
 
 ## Notes
 
+- **Never trust an isolation/remote claim without verifying** (learned
+  2026-08-31: a "remote" agent spawn silently ran locally — the launch
+  result was indistinguishable). If a task is dispatched as remote/cloud,
+  verify the execution locus from evidence: the agent reports its working
+  paths/hostname, and no artifacts appear on the local machine. If work
+  MUST NOT run locally (untrusted code, resource limits), do not use a
+  mechanism that can silently downgrade — use claude.ai/code sessions or
+  routines, where execution location is structural, not a parameter.
+
 - Never dispatch to a task whose issue lacks acceptance criteria — send it back
   through /split-spec instead. A vague issue becomes a vague PR.
 - Cross-repo dispatch: run the dispatch per-repo; beads syncs state across repos
