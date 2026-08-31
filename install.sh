@@ -27,6 +27,10 @@ if ! command -v bd >/dev/null 2>&1; then
   warn "beads (bd) not installed — /split-spec and /dispatch degrade gracefully without it"
 fi
 
+if ! command -v uv >/dev/null 2>&1; then
+  warn "uv not installed — /python-setup needs it (curl -LsSf https://astral.sh/uv/install.sh | sh)"
+fi
+
 # --- settings ----------------------------------------------------------------
 mkdir -p "$CLAUDE_DIR"
 if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
