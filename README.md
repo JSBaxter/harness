@@ -66,3 +66,15 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
   no resume with in-process teammates, one team per session.
 - Hook/plugin schemas move fast — if `/plugin` reports a schema error after a
   Claude Code upgrade, check the current docs before debugging the files.
+- **Updating `claude-review.yml` in an already-gated repo** deadlocks by
+  design: claude-code-action skips itself when the PR branch's workflow file
+  differs from main's (anti-tampering), and the ruleset blocks direct pushes
+  to main with no admin bypass. Rollout recipe — temporarily disable the
+  ruleset, push the workflow change to main, re-enable:
+  ```bash
+  rid=$(gh api repos/<owner>/<repo>/rulesets --jq '.[0].id')
+  gh api -X PUT "repos/<owner>/<repo>/rulesets/$rid" -f enforcement=disabled
+  git push origin main   # the workflow-sync commit
+  gh api -X PUT "repos/<owner>/<repo>/rulesets/$rid" -f enforcement=active
+  ```
+  Keep this human-only; agents shouldn't touch rulesets.
