@@ -10,7 +10,26 @@ fixed without a human ever opening the page. The core insight: make the page
 **deterministically renderable at any state**, then screenshots become both
 your eyes during development and byte-comparable test artifacts.
 
-## 1. The determinism contract (build this FIRST)
+Hard-won corollary from the same project: **this loop verifies rendering,
+not value.** A page can pass every pixel test and still communicate nothing.
+Validate the design before building the machine.
+
+## 0. Design mockup FIRST (before any infra, tests, or PRs)
+
+One throwaway static file — hand-authored SVG or HTML, hard-coded content,
+no build, no tests, no repo scaffolding. It must show the most
+information-dense state of the design (mid-animation, not the idle frame)
+with REAL representative content, not placeholder data: if the thing is
+meant to teach X, the mockup must visibly teach X to someone looking at it.
+Screenshot it, look at it, then **show it to James and get approval before
+decomposing or opening a single PR**. Iterate the mockup — it's the cheapest
+artifact in the whole pipeline; 8 PRs of infrastructure around an
+unvalidated design is the failure mode this step exists to prevent. For
+meaning-carrying visuals (educational, data viz), semantics are the design:
+seeded random data is a placeholder smell — the numbers must mean something
+or the animation has nothing to show.
+
+## 1. The determinism contract (build this FIRST after design approval)
 
 Before any visuals, give the page a test API (adapt naming per project):
 

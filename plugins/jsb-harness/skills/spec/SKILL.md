@@ -44,6 +44,22 @@ Linked issues: #NN
 Links to relevant ADRs: [[docs/adr/NNNN-*.md]]
 ```
 
+## The human gate (non-negotiable)
+
+A spec is a proposal until James approves it. After drafting:
+1. Present a compact summary in chat: purpose, the 3-5 key design decisions,
+   what's deliberately out of scope — and for anything educational or
+   user-facing, **what the user should learn or be able to do afterwards**.
+2. STOP and wait for approval. Do not run /split-spec, file issues, or write
+   implementation code against an unapproved spec.
+3. On approval, add `Approved: <date>` under Status. /split-spec checks for
+   this line and refuses without it.
+
+The spec is where the human steers; it is the cheapest point in the pipeline
+to be wrong at. Building against an unreviewed spec produces technically
+excellent implementations of the wrong thing (this happened; see the
+residual-stream-viz first iteration).
+
 ## Steps
 
 1. Read existing specs in `specs/` before writing — extend, don't duplicate.

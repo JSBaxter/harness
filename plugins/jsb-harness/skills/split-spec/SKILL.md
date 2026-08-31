@@ -11,6 +11,11 @@ Arguments: path to a spec file (defaults to the spec under discussion).
 
 ## Steps
 
+0. **Refuse unapproved specs.** The spec file must carry an
+   `Approved: <date>` line (added by /spec after James signs off). If it's
+   missing, stop and send the spec through the /spec human gate instead —
+   decomposition and build spend real tokens and gate runs; approval comes
+   first.
 1. Invoke the **spec-splitter** agent with the spec content. It returns an
    assessment, ordered task list with acceptance criteria and dependencies, a
    parallelism map, and any proposed sub-specs.
