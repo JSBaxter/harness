@@ -93,6 +93,15 @@ else. Every environment resolves the same source:
 - **Observability** (optional): self-hosted SigNoz or Langfuse; point Claude
   Code's OpenTelemetry env vars at it in `settings.local.json`.
 
+## Execution routing (verified defaults, 2026-08-31)
+
+| Work | Runs | Why |
+|---|---|---|
+| Interactive dev, `/dispatch` fleets, skills-as-commands, hooks enforcement, multi-identity ops, un-sticking a stuck status | **Local** | Only place the plugin loads and the guard hooks bind; only place with `gh` and full git identity control |
+| Fire-and-forget implementation, long tasks, away-from-desk work | **Cloud session** | Configure BOTH the project repo and `JSBaxter/harness`; agent follows skills from source; reports via PR comments; steer from web/phone, `--teleport` to pull down |
+| Event-driven + scheduled agent work (triage, sweeps, reactive fixes) | **Routine** | Cloud session semantics + GitHub/schedule triggers, zero Actions minutes |
+| The review gate (required `claude-review` status) | **Actions, only** | Only the workflow token can write statuses (cloud proxy blocks them — verified) |
+
 ## Gate cost model (don't reintroduce the quadratic)
 
 A stack of n PRs costs exactly **n gate runs + 1 per human push**. Merges and
