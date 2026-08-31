@@ -17,6 +17,10 @@
   then skips the agent reviewer and James's merge is the review. Finished
   implementation PRs are never labelled `proposal`. `/spec` applies the label
   for you; add it by hand for mockup/RFC PRs.
+- **claude-review never reviews itself.** A PR that changes the review workflow
+  (`.github/workflows/claude-review.yml`) or the reviewer agent
+  (`.claude/agents/reviewer.md`) auto-skips the reviewer and passes — the gate
+  can't judge a change to its own definition, so the human merge is the gate.
 - **Definition of done lives in the issue.** If the issue you're working has no
   acceptance criteria, send it back through `/split-spec` before writing code.
 - **New conventions get an ADR** (`/adr`), and CLAUDE.md gets the resulting rule.
