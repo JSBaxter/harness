@@ -46,14 +46,16 @@ Links to relevant ADRs: [[docs/adr/NNNN-*.md]]
 
 ## The human gate (non-negotiable)
 
-A spec is a proposal until James approves it. After drafting:
-1. Present a compact summary in chat: purpose, the 3-5 key design decisions,
-   what's deliberately out of scope — and for anything educational or
-   user-facing, **what the user should learn or be able to do afterwards**.
-2. STOP and wait for approval. Do not run /split-spec, file issues, or write
-   implementation code against an unapproved spec.
-3. On approval, add `Approved: <date>` under Status. /split-spec checks for
-   this line and refuses without it.
+A spec is a proposal until James merges it. After drafting:
+1. Present a compact summary in chat for workshopping: purpose, the 3-5 key
+   design decisions, what's deliberately out of scope — and for anything
+   educational or user-facing, **what the user should learn or be able to
+   do afterwards**.
+2. Commit the spec on a branch and **open a PR titled `Spec: ...`** whose
+   body states "Merging this PR = approving the spec." The PR is the durable
+   approval artifact; chat approval alone is not sufficient.
+3. STOP. Do not run /split-spec, file issues, or write implementation code
+   until the spec PR is merged. James's merge is the signature.
 
 The spec is where the human steers; it is the cheapest point in the pipeline
 to be wrong at. Building against an unreviewed spec produces technically

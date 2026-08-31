@@ -11,11 +11,12 @@ Arguments: path to a spec file (defaults to the spec under discussion).
 
 ## Steps
 
-0. **Refuse unapproved specs.** The spec file must carry an
-   `Approved: <date>` line (added by /spec after James signs off). If it's
-   missing, stop and send the spec through the /spec human gate instead —
-   decomposition and build spend real tokens and gate runs; approval comes
-   first.
+0. **Refuse unapproved specs.** Approved = the spec as it exists on `main`
+   (James merged its PR). If the spec file differs from main's version
+   (unmerged branch, uncommitted edits), stop and send it through the /spec
+   human gate instead — decomposition and build spend real tokens and gate
+   runs; approval comes first. Check:
+   `git diff origin/main -- specs/<file>` must be empty.
 1. Invoke the **spec-splitter** agent with the spec content. It returns an
    assessment, ordered task list with acceptance criteria and dependencies, a
    parallelism map, and any proposed sub-specs.
