@@ -22,13 +22,17 @@ agent. Pick a real small project and drive it entirely through:
 - [x] `/spec` → `/split-spec` (exercises the spec-splitter agent + issue filing)
 - [x] `/dispatch` (background agents + worktrees, 4 agents used)
 - [x] `/ship` from an agent (exercises the local fresh-context reviewer path)
-- [ ] One full human-feedback round on a real PR; verify the
-      review-submission `@claude` trigger variant (deployed, untested —
-      fallback: plain comment)
-- [ ] Fix every rough edge found and commit the fixes here
+- [x] One full human-feedback round on a real PR (issue_comment path;
+      review-submission `@claude` trigger variant still untested —
+      fallback: plain comment works)
+- [x] Fix every rough edge found and commit the fixes here (11+ defects
+      and process gaps encoded into skills/workflows/README)
 
-Exit criteria: a real feature merged with zero manual steps outside
-review-and-merge.
+**Phase 1 closed 2026-08-31.** Exit criteria met in spirit: T1–T4 merged
+through the full pipeline; driver project (residual-stream-viz) parked
+after serving as shakeout — spec-v2 branch retained if revived. Biggest
+process outcomes: spec human gate (PR merge = approval), mockup-first
+frontend rule, screenshots embedded in FE PR bodies.
 
 ## Phase 2 — hands-off cloud
 
