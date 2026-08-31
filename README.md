@@ -64,7 +64,7 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
 ## Known constraints (by design)
 
 - Personal GitHub plan: no org rulesets, no merge queues → per-repo rulesets
-  (`templates/project/ruleset.json`) + auto-merge with "require branches up to
+  (`templates/ruleset.json`) + auto-merge with "require branches up to
   date".
 - Anthropic's managed Code Review product is Team/Enterprise-only → the
   self-hosted review workflow here is the substitute.

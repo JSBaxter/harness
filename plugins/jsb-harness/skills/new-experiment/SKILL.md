@@ -44,7 +44,7 @@ harness checkout (`templates/project/`) into a fresh repo.
 4. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
    ```bash
    gh-as <identity> api repos/<owner>/<name>/rulesets --method POST \
-     --input <harness-repo>/templates/project/ruleset.json
+     --input <harness-repo>/templates/ruleset.json
    ```
 5. Add the `CLAUDE_CODE_OAUTH_TOKEN` secret so the review workflow can run
    (the token is Anthropic-side auth — the same one works for every identity):

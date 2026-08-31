@@ -6,8 +6,8 @@ parked until needed; observability stays on built-ins by choice.
 
 ## Phase 0 — prerequisites (blocking Phase 1)
 
-- [ ] Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- [ ] Install libseccomp2 (`sudo apt install libseccomp2`) — the native sandbox
+- [x] Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- [x] Install libseccomp2 (`sudo apt install libseccomp2`) — the native sandbox
       doesn't run without it, and it's the always-on isolation layer
 - [ ] Merge/close out: delete `harness-test-drive` (needs
       `gh auth refresh -h github.com -s delete_repo`) or keep as reference
@@ -17,11 +17,11 @@ parked until needed; observability stays on built-ins by choice.
 The pipeline plumbing is proven; the skills have never been run cold by an
 agent. Pick a real small project and drive it entirely through:
 
-- [ ] `/new-experiment <name>` (first cold run of the skill itself)
+- [x] `/new-experiment <name>` (first cold run of the skill itself)
 - [ ] `/python-setup`
-- [ ] `/spec` → `/split-spec` (exercises the spec-splitter agent + issue filing)
-- [ ] `/dispatch` (first real agent-teams / background-session use)
-- [ ] `/ship` from an agent (exercises the local fresh-context reviewer path)
+- [x] `/spec` → `/split-spec` (exercises the spec-splitter agent + issue filing)
+- [x] `/dispatch` (background agents + worktrees, 4 agents used)
+- [x] `/ship` from an agent (exercises the local fresh-context reviewer path)
 - [ ] One full human-feedback round on a real PR; verify the
       review-submission `@claude` trigger variant (deployed, untested —
       fallback: plain comment)
