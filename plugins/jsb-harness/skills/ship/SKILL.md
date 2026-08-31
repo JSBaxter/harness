@@ -24,8 +24,9 @@ task; don't open PRs any other way.
    in the PR body for the human.
 5. **ADR check** — did this work establish a new convention or make a real
    choice? If yes, run /adr before opening the PR.
-6. **Commit hygiene** — commits should be small and each message should say why,
-   not just what. Squash fixups.
+6. **Commit hygiene** — commits should be small and each message follows
+   Conventional Commits (`type(scope): summary`, e.g. `feat(auth): ...`); the
+   body says why, not just what. Squash fixups.
 7. **Frontend/visual changes: screenshots in the PR body.** Render 1-3
    deterministic screenshots of the key states this PR changed (use the
    project's shot helper), commit them under `docs/screenshots/<branch>/`,
