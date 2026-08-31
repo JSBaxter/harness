@@ -48,19 +48,43 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      # Proposals — specs, mockups, anything opened just to ask James's opinion —
-      # carry the `proposal` label and are NOT agent-reviewed; James's own review
-      # is the gate. We still stamp claude-review green (below) so the required
-      # status is satisfiable: the workflow can't be skipped via paths-ignore
-      # without leaving the required check forever "expected" on a spec PR.
-      - name: Proposal — skip agent review, stamp green
-        if: contains(github.event.pull_request.labels.*.name, 'proposal')
+      # Decide whether this PR gets agent-reviewed at all. Two kinds skip the
+      # reviewer and stamp claude-review green directly (James's own merge is the
+      # gate for both). We still run + stamp rather than paths-ignore, so the
+      # required status is always satisfiable instead of stuck "expected".
+      #   1. Proposals — a spec, a mockup, anything opened to ask James's opinion,
+      #      marked with the `proposal` label. Only finished work is reviewed.
+      #   2. Gate self-changes — claude-review does not review itself. A PR that
+      #      touches the review workflow or the reviewer agent can't be judged by
+      #      the reviewer it is editing (and claude-code-action security-skips any
+      #      PR that modifies its own workflow file regardless), so we pass it and
+      #      leave the judgement to the human merge.
+      - name: Classify — should this PR be agent-reviewed?
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          printf 'APPROVE' > review-verdict.txt
-          printf '_Proposal PR (`proposal` label) — agent review skipped; only finished work is agent-reviewed, and James'\''s merge is the review gate here._\n' > review-summary.md
+          reason=""
+          if ${{ contains(github.event.pull_request.labels.*.name, 'proposal') }}; then
+            reason="Proposal PR (\`proposal\` label) — only finished work is agent-reviewed"
+          else
+            changed=$(gh api --paginate \
+              "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+              --jq '.[].filename')
+            if grep -qE '^(\.github/workflows/claude-review\.yml|\.claude/agents/reviewer\.md)$' <<<"$changed"; then
+              reason="Review-gate change — claude-review does not review itself"
+            fi
+          fi
+          if [ -n "$reason" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            printf 'APPROVE' > review-verdict.txt
+            printf '_%s; James'\''s merge is the gate here._\n' "$reason" > review-summary.md
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Review-fix loop
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'proposal') }}
+        if: steps.classify.outputs.skip != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
