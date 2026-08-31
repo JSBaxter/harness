@@ -28,11 +28,21 @@ else. Every environment resolves the same source:
 - **Developing skills**: `claude --plugin-dir plugins/jsb-harness` is the
   only sanctioned way to run unpushed skills. Skill changes ship via
   branch → PR → merge like everything else.
-- **Known gap**: GitHub Actions can't fetch private marketplaces
-  (claude-code-action#850). Deliberately fine: the gate/fix workflow
-  prompts are self-contained and the reviewer agent is repo-level. If CI
-  ever needs the plugin: checkout the marketplace repo with a PAT in a
-  prior step and pass its local path to `plugin_marketplaces`.
+- **Verified gaps (2026-08-31, live-probed)**: a PRIVATE marketplace is
+  unreachable from BOTH non-local environments — GitHub Actions
+  (claude-code-action#850) and cloud sessions/routines (the session proxy
+  pins GitHub access to the session's configured repos; other private
+  repos 403). The settings pointer is read but the marketplace never
+  clones. Consequence: private-marketplace skills only propagate to local
+  sessions; full propagation requires the plugin to be publicly
+  fetchable (see split-repo note below) or vendored (rejected: copies
+  drift).
+- **Cloud sessions cannot write commit statuses** (blanket 403 on
+  /statuses and /check-runs; status READS hit a proxy bug, HTTP 502).
+  Verified by live probe. The review gate therefore lives in GitHub
+  Actions permanently — only the workflow token can stamp the required
+  `claude-review` status — and a stuck status can only be cleared from a
+  local session or a workflow re-run, never from the cloud.
 
 ## What's inside
 
