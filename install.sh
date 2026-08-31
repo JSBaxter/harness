@@ -56,13 +56,17 @@ if [ ! -f "$CLAUDE_DIR/identities.local.json" ]; then
 fi
 
 # --- plugin marketplace ------------------------------------------------------
-say "registering plugin marketplace"
-if claude plugin marketplace add "$HARNESS_DIR" 2>/dev/null; then
+# Registered by GITHUB SOURCE, not local path: every environment (local, cloud,
+# routines) resolves the same pushed marketplace — skills exist when merged,
+# nowhere else. This checkout is for DEVELOPING the harness; test unpushed
+# skills only via: claude --plugin-dir "$HARNESS_DIR/plugins/jsb-harness"
+say "registering plugin marketplace (github: JSBaxter/harness)"
+if claude plugin marketplace add JSBaxter/harness 2>/dev/null; then
   claude plugin install jsb-harness@jsb-harness 2>/dev/null || true
-  say "plugin installed"
+  say "plugin installed from github source"
 else
   warn "CLI plugin registration unavailable — inside Claude Code run:"
-  warn "  /plugin marketplace add $HARNESS_DIR"
+  warn "  /plugin marketplace add JSBaxter/harness"
   warn "  /plugin install jsb-harness@jsb-harness"
 fi
 

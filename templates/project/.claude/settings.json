@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "jsb-harness": {
+      "source": {
+        "source": "github",
+        "repo": "JSBaxter/harness"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "jsb-harness@jsb-harness": true
+  }
+}

@@ -13,6 +13,27 @@ cd ~/Documents/repos/harness && ./install.sh
 Machine-specific config (auth, local paths, OTel endpoints) goes in
 `~/.claude/settings.local.json` and is never committed here.
 
+## Skill distribution (uniform — no environment diverges)
+
+One source of truth: this repo's plugin marketplace on GitHub
+(`JSBaxter/harness`). A skill exists when it's merged to main here, nowhere
+else. Every environment resolves the same source:
+
+- **Local cockpit**: `install.sh` registers the marketplace by GitHub
+  source (this checkout is only for developing the harness).
+- **Project repos**: carry a committed `.claude/settings.json` POINTER
+  (`extraKnownMarketplaces` + `enabledPlugins`, from `templates/project/`)
+  — local sessions, cloud sessions, and routines all install the plugin
+  from it at session start. A pointer, never a copy.
+- **Developing skills**: `claude --plugin-dir plugins/jsb-harness` is the
+  only sanctioned way to run unpushed skills. Skill changes ship via
+  branch → PR → merge like everything else.
+- **Known gap**: GitHub Actions can't fetch private marketplaces
+  (claude-code-action#850). Deliberately fine: the gate/fix workflow
+  prompts are self-contained and the reviewer agent is repo-level. If CI
+  ever needs the plugin: checkout the marketplace repo with a PAT in a
+  prior step and pass its local path to `plugin_marketplaces`.
+
 ## What's inside
 
 | Path | What |
