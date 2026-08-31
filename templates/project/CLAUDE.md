@@ -9,6 +9,14 @@
   accepted ADR, stop and surface it — don't silently "fix" the decision away.
 - **Never push to main.** All changes go: branch → small commits → `/ship` → PR.
   One issue = one PR = reviewable in under ten minutes.
+- **Conventional Commits, always.** Every commit message uses the
+  `type(scope): summary` form (`feat`, `fix`, `refactor`, `docs`, `test`,
+  `chore`, …). The body still says *why*, not just *what*.
+- **Only finished work gets agent review.** A PR that just asks James's opinion —
+  a spec, a mockup, any proposal — carries the `proposal` label; the review gate
+  then skips the agent reviewer and James's merge is the review. Finished
+  implementation PRs are never labelled `proposal`. `/spec` applies the label
+  for you; add it by hand for mockup/RFC PRs.
 - **Definition of done lives in the issue.** If the issue you're working has no
   acceptance criteria, send it back through `/split-spec` before writing code.
 - **New conventions get an ADR** (`/adr`), and CLAUDE.md gets the resulting rule.

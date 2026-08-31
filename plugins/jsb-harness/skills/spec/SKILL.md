@@ -51,9 +51,16 @@ A spec is a proposal until James merges it. After drafting:
    design decisions, what's deliberately out of scope — and for anything
    educational or user-facing, **what the user should learn or be able to
    do afterwards**.
-2. Commit the spec on a branch and **open a PR titled `Spec: ...`** whose
-   body states "Merging this PR = approving the spec." The PR is the durable
-   approval artifact; chat approval alone is not sufficient.
+2. Commit the spec on a branch (Conventional Commits, e.g. `docs(spec): ...`)
+   and **open a PR titled `Spec: ...`** whose body states "Merging this PR =
+   approving the spec." The PR is the durable approval artifact; chat approval
+   alone is not sufficient. Apply the **`proposal`** label so the review gate
+   skips the agent reviewer — a spec asks James's opinion, it isn't finished
+   work to critique:
+   ```bash
+   gh label create proposal -c "c5def7" -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
+   gh pr edit <n> --add-label proposal
+   ```
 3. STOP. Do not run /split-spec, file issues, or write implementation code
    until the spec PR is merged. James's merge is the signature.
 

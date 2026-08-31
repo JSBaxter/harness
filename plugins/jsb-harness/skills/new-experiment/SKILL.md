@@ -45,6 +45,12 @@ harness checkout (`templates/project/`) into a fresh repo.
    ```bash
    gh-as <identity> repo edit <owner>/<name> --delete-branch-on-merge
    ```
+   Also create the `proposal` label — proposal/spec/mockup PRs wear it to skip
+   the agent review gate (finished work only is reviewed):
+   ```bash
+   gh-as <identity> label create proposal -c "c5def7" \
+     -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
+   ```
 5. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
    ```bash
    gh-as <identity> api repos/<owner>/<name>/rulesets --method POST \
