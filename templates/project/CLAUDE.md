@@ -44,4 +44,5 @@
 
 - `specs/` — living specs: current intended behavior + pending deltas
 - `docs/adr/` — decision history (MADR-style, supersede-don't-delete)
-- `.github/workflows/claude-review.yml` — agent review gate on every PR
+- `.github/workflows/claude-review.yml` — thin caller of the harness reusable
+  review workflow; the agent review gate on every PR (proposals skip it)

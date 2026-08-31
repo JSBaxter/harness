@@ -69,6 +69,17 @@ harness checkout (`templates/project/`) into a fresh repo.
    token into logs or chat.
 5. Fill in the templated files: project name in `CLAUDE.md`, the description in
    `README.md`, and an initial spec stub in `specs/` if the user described the idea.
+   - **Review workflow** — the template's `.github/workflows/claude-review.yml`
+     is a thin caller of the harness reusable workflow (see harness ADR 0001).
+     It needs the harness repo's Actions access set to `user` once per machine/
+     account: `gh api -X PUT repos/JSBaxter/harness/actions/permissions/access
+     -f access_level=user` (harmless to re-run).
+   - **Stealth repos only:** the stub names `JSBaxter/harness`, which would link
+     the accounts — a stealth repo must NOT use it. Replace the stub with a
+     self-contained copy of the gate: take the harness reusable workflow, change
+     `on: workflow_call` to the `pull_request` trigger block from the primary
+     stub (with `types` and the concurrency group), and inline it. Accept the
+     drift on those few repos.
 6. Commit and push the personalization, then report: repo URL, local path, and
    what protection/workflow is active.
 

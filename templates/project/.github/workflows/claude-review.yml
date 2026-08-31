@@ -1,22 +1,22 @@
-# Agent review gate: fresh-context reviewer -> fixer -> re-review, bounded.
+# Thin caller for the agent review gate. All logic lives in the reusable
+# workflow JSBaxter/harness/.github/workflows/claude-review.yml, so review-gate
+# updates in the harness reach this repo on its next PR with no edit here — this
+# stub only wires the PR triggers, the per-PR concurrency group, and forwards
+# secrets. See harness docs/adr/0001-ci-via-reusable-workflow.md.
 #
-# Design notes (don't simplify these away):
-# - The whole loop runs INSIDE one claude-code-action invocation. Reviewer
-#   freshness comes from spawning a new read-only `reviewer` subagent per round
-#   (.claude/agents/reviewer.md), so fix-pushes never ping-pong CI runs.
-# - The required check is the `claude-review` COMMIT STATUS this run stamps on
-#   the final head SHA — not the workflow's own check run. This matters: when
-#   the run pushes fixes, the bot-triggered `synchronize` event is skipped by
-#   the actor guard below, so a check-run-based gate would never turn green on
-#   the new head (claude-code-action issue #1299).
-# - Termination: 3 review rounds max + --max-turns + timeout-minutes +
-#   concurrency group. No consensus => failing status + needs-human label.
+# IMPORTANT — primary-identity repos ONLY. A stealth-identity repo must NOT
+# reference JSBaxter/* (it would link the accounts in plaintext); it keeps a
+# self-contained copy of the review workflow instead.
+#
+# Pin: `@main` tracks the harness tip (zero-maintenance; a bad harness push can
+# break every repo's gate at once). Swap to a tag (e.g. `@v1`) for controlled
+# rollout.
 name: Claude Review
 
 on:
   pull_request:
-    # `labeled`/`unlabeled` are here so toggling the `proposal` label flips the
-    # review outcome without needing a new push (see the proposal short-circuit).
+    # labeled/unlabeled: toggling the `proposal` label re-runs and flips the
+    # verdict (proposals skip the agent reviewer — see the reusable workflow).
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 concurrency:
@@ -25,116 +25,5 @@ concurrency:
 
 jobs:
   review:
-    # Skip cleanly (green) when the triggering push came from any bot —
-    # Claude's own fix-pushes can surface as claude[bot] OR github-actions
-    # depending on the credential used; both already stamped their head.
-    if: >-
-      !endsWith(github.actor, '[bot]') && github.actor != 'github-actions'
-      && !github.event.pull_request.draft
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      statuses: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
-      # Proposals — specs, mockups, anything opened just to ask James's opinion —
-      # carry the `proposal` label and are NOT agent-reviewed; James's own review
-      # is the gate. We still stamp claude-review green (below) so the required
-      # status is satisfiable: the workflow can't be skipped via paths-ignore
-      # without leaving the required check forever "expected" on a spec PR.
-      - name: Proposal — skip agent review, stamp green
-        if: contains(github.event.pull_request.labels.*.name, 'proposal')
-        run: |
-          printf 'APPROVE' > review-verdict.txt
-          printf '_Proposal PR (`proposal` label) — agent review skipped; only finished work is agent-reviewed, and James'\''s merge is the review gate here._\n' > review-summary.md
-
-      - name: Review-fix loop
-        if: ${{ !contains(github.event.pull_request.labels.*.name, 'proposal') }}
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          show_full_output: true
-          claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
-          prompt: |
-            You are the review gate for PR #${{ github.event.pull_request.number }}
-            (base: ${{ github.event.pull_request.base.ref }}). You are the FIXER;
-            you never judge your own work — judging is done by the `reviewer`
-            subagent, spawned FRESH each round so it never sees the reasoning
-            behind the code it reviews.
-
-            Loop, at most 3 rounds:
-            1. Spawn the `reviewer` agent on the diff
-               (`git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`).
-               Spawn it SYNCHRONOUSLY (run_in_background: false) and wait for
-               its result — never in the background: this is a headless run,
-               and it ends the moment your turn ends, killing any background
-               agent before its notification can arrive.
-            2. If VERDICT is APPROVE: exit the loop.
-            3. Otherwise fix ONLY the Important findings — smallest correct fix,
-               no opportunistic refactoring. Run the project's tests
-               (see CLAUDE.md). Commit using Conventional Commits style with a
-               `review` scope, e.g. `fix(review): ...` (or `refactor(review): ...`
-               / `test(review): ...` as fits the change).
-            4. Next round.
-
-            Then finalize — this part is mandatory even if you are unsure:
-            - Push any commits you made.
-            - Write two files in the repo root (do NOT commit or push them):
-              * review-verdict.txt — exactly APPROVE or NEEDS_HUMAN
-              * review-summary.md — short markdown: rounds run, findings fixed,
-                Minor findings noted, and (if NEEDS_HUMAN) each unresolved
-                Important finding with why it wasn't fixed (disputed / risky /
-                out of scope).
-            - Do NOT set commit statuses, labels, or comments yourself — your
-              token can't write statuses; a later workflow step publishes your
-              verdict with the right token.
-            - Minor findings never block: note them in review-summary.md; do
-              not fix them and do not loop on them.
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      # Publishes Claude's verdict with the workflow token (statuses: write).
-      # Doubles as the crash/timeout backstop: a missing verdict file fails
-      # closed with needs-human instead of leaving "expected" limbo.
-      - name: Publish verdict
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          sha=$(git rev-parse HEAD)
-          verdict=$(head -c 32 review-verdict.txt 2>/dev/null | tr -d '[:space:]' || true)
-          # Never clobber an existing verdict with a crash-backstop failure:
-          # if this run produced no verdict but the sha already has one
-          # (e.g. this run was rejected as a bot-actor duplicate), keep it.
-          if [ -z "$verdict" ]; then
-            existing=$(gh api "repos/${{ github.repository }}/commits/$sha/statuses" \
-              --jq '[.[] | select(.context=="claude-review")][0].state' 2>/dev/null || echo "")
-            if [ -n "$existing" ] && [ "$existing" != "null" ]; then
-              echo "keeping existing claude-review=$existing on $sha"
-              exit 0
-            fi
-          fi
-          if [ "$verdict" = "APPROVE" ]; then
-            gh api "repos/${{ github.repository }}/statuses/$sha" \
-              -f state=success -f context=claude-review \
-              -f description="approved by review loop"
-            gh pr edit "$PR" --remove-label needs-human 2>/dev/null || true
-          else
-            gh api "repos/${{ github.repository }}/statuses/$sha" \
-              -f state=failure -f context=claude-review \
-              -f description="verdict: ${verdict:-run did not complete} - needs human"
-            gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force || true
-            gh pr edit "$PR" --add-label needs-human || true
-          fi
-          if [ -s review-summary.md ]; then
-            gh pr comment "$PR" --body-file review-summary.md || true
-          fi
+    uses: JSBaxter/harness/.github/workflows/claude-review.yml@main
+    secrets: inherit
