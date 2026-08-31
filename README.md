@@ -61,6 +61,25 @@ Machine-specific config (auth, local paths, OTel endpoints) goes in
 - **Observability** (optional): self-hosted SigNoz or Langfuse; point Claude
   Code's OpenTelemetry env vars at it in `settings.local.json`.
 
+## Gate cost model (don't reintroduce the quadratic)
+
+A stack of n PRs costs exactly **n gate runs + 1 per human push**. Merges and
+retargets trigger nothing: `edited` events aren't listened to, and a
+retargeted PR's diff vs its new base is the increment already reviewed
+(status rides on the head commit). Two rules protect this — keep them:
+
+- **Never** re-enable `strict_required_status_checks_policy` ("require
+  branches up to date"): it forces bot-authored update merges into every
+  remaining PR on every merge → O(n²) runs of already-reviewed content, by a
+  bot identity the gate rejects.
+- **Never** add a global Actions `concurrency` group as a rate cap: groups
+  hold one running + ONE pending run and silently replace further arrivals →
+  dropped runs → unstamped heads → wedged merges. Burst control lives in
+  /dispatch's agent cap (default 4) instead.
+
+Propagating a fix up a live stack costs one run per descendant — do it
+deliberately, not habitually.
+
 ## Known constraints (by design)
 
 - Personal GitHub plan: no org rulesets, no merge queues → per-repo rulesets
