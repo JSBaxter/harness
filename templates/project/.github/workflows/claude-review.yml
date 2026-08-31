@@ -23,6 +23,17 @@ concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# A reusable-workflow caller caps the called workflow at the caller's token
+# scopes, and a repo's default GITHUB_TOKEN is read-only — so grant here the
+# scopes the gate needs (stamp statuses, push fixes, label, comment) or the call
+# fails to start.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  id-token: write
+
 jobs:
   review:
     uses: JSBaxter/harness/.github/workflows/claude-review.yml@main
