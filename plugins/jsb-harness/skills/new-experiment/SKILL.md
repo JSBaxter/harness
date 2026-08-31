@@ -35,12 +35,18 @@ harness checkout (`templates/project/`) into a fresh repo.
    identity's email before the first commit — abort loudly if not.
    If the template repo doesn't exist yet, say so and offer to create it from
    the harness repo's `templates/project/` directory instead of failing silently.
-3. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
+3. Personalize BEFORE protecting: fill in the templated files (project name in
+   `CLAUDE.md`, real test/lint commands, the description in `README.md`, an
+   initial spec stub in `specs/` if the user described the idea), commit, and
+   push to main. This must happen before the ruleset lands — the ruleset
+   requires PRs for main with no admin bypass, so a later direct push would
+   block (by design).
+4. Apply the branch-protection ruleset (personal accounts can't use org rulesets):
    ```bash
    gh-as <identity> api repos/<owner>/<name>/rulesets --method POST \
      --input <harness-repo>/templates/project/ruleset.json
    ```
-4. Add the `CLAUDE_CODE_OAUTH_TOKEN` secret so the review workflow can run
+5. Add the `CLAUDE_CODE_OAUTH_TOKEN` secret so the review workflow can run
    (the token is Anthropic-side auth — the same one works for every identity):
    ```bash
    gh-as <identity> secret set CLAUDE_CODE_OAUTH_TOKEN --repo <owner>/<name> \

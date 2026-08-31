@@ -72,6 +72,7 @@ jobs:
               gh api repos/${{ github.repository }}/statuses/$FINAL_SHA \
                 -f state=failure -f context=claude-review \
                 -f description="no consensus after 3 rounds - needs human"
+              gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force
               gh pr edit ${{ github.event.pull_request.number }} --add-label needs-human
               Post ONE PR comment listing the unresolved Important findings and,
               for each, why it was not fixed (disputed / risky / out of scope).
@@ -95,5 +96,6 @@ jobs:
             gh api "repos/${{ github.repository }}/statuses/$sha" \
               -f state=failure -f context=claude-review \
               -f description="review run did not complete (timeout?) - needs human"
+            gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force || true
             gh pr edit "$PR" --add-label needs-human || true
           fi
