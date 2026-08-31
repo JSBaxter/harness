@@ -43,6 +43,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
           claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
           prompt: |
             You are the review gate for PR #${{ github.event.pull_request.number }}
@@ -54,6 +55,10 @@ jobs:
             Loop, at most 3 rounds:
             1. Spawn the `reviewer` agent on the diff
                (`git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`).
+               Spawn it SYNCHRONOUSLY (run_in_background: false) and wait for
+               its result — never in the background: this is a headless run,
+               and it ends the moment your turn ends, killing any background
+               agent before its notification can arrive.
             2. If VERDICT is APPROVE: exit the loop.
             3. Otherwise fix ONLY the Important findings — smallest correct fix,
                no opportunistic refactoring. Run the project's tests
