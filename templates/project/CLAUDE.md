@@ -50,3 +50,5 @@
 - `docs/adr/` — decision history (MADR-style, supersede-don't-delete)
 - `.github/workflows/claude-review.yml` — thin caller of the harness reusable
   review workflow; the agent review gate on every PR (proposals skip it)
+- `.claude/skills/steward/SKILL.md` — how an agent watching a PR here should
+  weigh review-gate findings (advisory vs. worth a push)
