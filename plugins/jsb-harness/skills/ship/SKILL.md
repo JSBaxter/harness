@@ -41,13 +41,33 @@ task; don't open PRs any other way.
    `gh api repos/<o>/<r>/contents/<path>?ref=<branch>` — `git add -A`
    silently skips gitignored paths, and a broken embed looks identical to
    an unsupported one. Show the changed state, not the idle page.
-8. **Open the PR**:
+8. **Is this a proposal?** A spec, a mockup, an ADR draft, a sketch — anything
+   opened to ask James's opinion rather than to land finished work — wears the
+   **`proposal`** label. The review gate then skips the agent reviewer and
+   stamps `claude-review` green directly; James's merge is the gate instead.
+   Apply it **at creation** (`--label proposal` in step 9). Labelling afterwards
+   does work — `labeled` re-runs the gate and flips the verdict — but only after
+   a full agent review has already run.
+   If the repo doesn't have the label yet:
    ```bash
-   gh pr create --title "..." --body "..." --base <default-branch>
+   gh label create proposal -c "c5def7" \
+     -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
+   ```
+   Forgetting this is costly and the failure is silent: the gate reviews an
+   unlabelled mockup as if it were production code, and because it re-runs on
+   every push, each fix you make in response spawns another round. If you find
+   yourself on round three of style nits against a file you plan to throw away,
+   this label is what you missed — add it rather than continuing to push.
+9. **Open the PR**:
+   ```bash
+   gh pr create --title "..." --body "..." --base <default-branch> [--label proposal]
    ```
    PR body must include: `Closes #NN` (the driving issue), a summary of what
    changed and why, test evidence (what was run, result), screenshots per
    step 7 for visual changes, and any disputed reviewer findings from
    step 4. If `gh pr edit` hits the projectCards GraphQL deprecation error,
    PATCH the body via `gh api -X PATCH repos/<owner>/<repo>/pulls/<n>`.
-8. Report the PR URL and the review-gate status once CI kicks off.
+10. Report the PR URL and the review-gate status once CI kicks off. On a
+   proposal PR, expect `claude-review` to pass immediately with "Proposal PR
+   (`proposal` label)" as its reason — if it instead starts an agent review,
+   the label didn't take.

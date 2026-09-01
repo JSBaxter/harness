@@ -24,7 +24,9 @@ meant to teach X, the mockup must visibly teach X to someone looking at it.
 Screenshot it, look at it, then **show it to James and get approval before
 decomposing or opening a single PR**. Iterate the mockup — it's the cheapest
 artifact in the whole pipeline; 8 PRs of infrastructure around an
-unvalidated design is the failure mode this step exists to prevent. For
+unvalidated design is the failure mode this step exists to prevent. **Label
+that mockup PR `proposal`** (/ship step 8) — unlabelled, the review gate
+agent-reviews a throwaway file as finished code, once per push. For
 meaning-carrying visuals (educational, data viz), semantics are the design:
 seeded random data is a placeholder smell — the numbers must mean something
 or the animation has nothing to show.
