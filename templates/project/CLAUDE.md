@@ -23,6 +23,11 @@
   can't judge a change to its own definition, so the human merge is the gate.
 - **Definition of done lives in the issue.** If the issue you're working has no
   acceptance criteria, send it back through `/split-spec` before writing code.
+- **Approach before tasks, when there's a real choice.** If a spec involves
+  picking a dependency, an interface, or module boundaries — or work will be
+  dispatched in parallel — run `/plan` after the spec merges and before
+  `/split-spec`. Plans are ephemeral: durable decisions become ADRs, and
+  `specs/<area>.plan.md` is deleted once its issues land.
 - **New conventions get an ADR** (`/adr`), and CLAUDE.md gets the resulting rule.
 - **Tests run before every PR.** Test command: `TEST_COMMAND_HERE`.
   Lint command: `LINT_COMMAND_HERE`.

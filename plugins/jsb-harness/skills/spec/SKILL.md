@@ -54,12 +54,14 @@ A spec is a proposal until James merges it. After drafting:
 2. Commit the spec on a branch (Conventional Commits, e.g. `docs(spec): ...`)
    and **open a PR titled `Spec: ...`** whose body states "Merging this PR =
    approving the spec." The PR is the durable approval artifact; chat approval
-   alone is not sufficient. Apply the **`proposal`** label so the review gate
-   skips the agent reviewer — a spec asks James's opinion, it isn't finished
-   work to critique:
+   alone is not sufficient. The **`proposal`** label makes the review gate skip
+   the agent reviewer — a spec asks James's opinion, it isn't finished work to
+   critique. Apply it **at creation**; labelling afterwards works but only after
+   a full agent review has already run (see /ship step 8):
    ```bash
-   gh label create proposal -c "c5def7" -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
-   gh pr edit <n> --add-label proposal
+   gh label create proposal -c "c5def7" \
+     -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
+   gh pr create --title "Spec: ..." --body "..." --label proposal
    ```
 3. STOP. Do not run /split-spec, file issues, or write implementation code
    until the spec PR is merged. James's merge is the signature.
