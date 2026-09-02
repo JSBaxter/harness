@@ -54,7 +54,7 @@ else. Every environment resolves the same source:
 
 | Path | What |
 |---|---|
-| `plugins/jsb-harness/skills/` | `/new-experiment`, `/spec`, `/split-spec`, `/adr`, `/ship`, `/dispatch` |
+| `plugins/jsb-harness/skills/` | `/new-experiment`, `/spec`, `/plan`, `/split-spec`, `/adr`, `/ship`, `/dispatch` |
 | `plugins/jsb-harness/agents/` | `reviewer` (adversarial, read-only), `spec-splitter` |
 | `plugins/jsb-harness/hooks/` | PreToolUse guard against direct pushes to main |
 | `settings/settings.json` | Shared settings: agent teams on, worktree defaults, safe-command allowlist |
@@ -67,8 +67,9 @@ else. Every environment resolves the same source:
 
 1. **Idea** → `/new-experiment` — isolated scratch repo from the template,
    ruleset + review gate applied, cloned under `~/Documents/repos/scratch/`.
-2. **Spec** → `/spec`; too big → `/split-spec` → GitHub issues (+ beads), each
-   with agent-executable acceptance criteria.
+2. **Spec** → `/spec`; a real choice of approach → `/plan` (ephemeral, gated,
+   retired when its issues land); too big → `/split-spec` → GitHub issues
+   (+ beads), each with agent-executable acceptance criteria.
 3. **Build** → `/dispatch` — teammates/background sessions, one worktree each;
    watch with `claude agents`.
 4. **Gate** → every PR runs `claude-review.yml`: fresh-context reviewer →
