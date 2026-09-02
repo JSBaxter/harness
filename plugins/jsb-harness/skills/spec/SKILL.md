@@ -72,10 +72,16 @@ residual-stream-viz first iteration).
 ## Steps
 
 1. Read existing specs in `specs/` before writing — extend, don't duplicate.
+   (`<area>.plan.md` files there are implementation plans, not specs — they
+   describe how in-flight work is being built and get retired when it lands.)
 2. If the user described a change to existing behavior, write it under
    **Pending changes** as a delta; don't rewrite the body until the change lands.
-3. If the spec looks too big for one agent to implement in one PR, say so and
-   suggest running /split-spec.
+3. Say what comes next, and that it comes *after* James merges the spec PR:
+   /plan when the approach involves a real choice (multiple components, a
+   dependency or interface being picked, parallel dispatch ahead), then
+   /split-spec if the spec looks too big for one agent to implement in one PR.
+   Neither is mandatory — /plan is skipped when the approach is forced, and
+   /split-spec reports "small enough as-is" when it is.
 4. When implementation of a pending change merges, fold the delta into the
    Behavior section and delete it from Pending changes (do this when asked, or
    when you notice a merged PR references the delta).

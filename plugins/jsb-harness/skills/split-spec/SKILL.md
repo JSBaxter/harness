@@ -17,16 +17,23 @@ Arguments: path to a spec file (defaults to the spec under discussion).
    human gate instead — decomposition and build spend real tokens and gate
    runs; approval comes first. Check:
    `git diff origin/main -- specs/<file>` must be empty.
-1. Invoke the **spec-splitter** agent with the spec content. It returns an
+1. **Pick up the plan, if there is one.** If `specs/<area>.plan.md` exists on
+   `main`, pass it to spec-splitter alongside the spec: its *Structure* section
+   is what makes the parallelism map real rather than inferred, and its
+   *Contracts* section is what stops two parallel agents negotiating an
+   interface in two PRs. If the spec involves a real choice of approach and no
+   plan exists, say so and offer /plan before decomposing — but don't block on
+   it; a forced approach needs no plan.
+2. Invoke the **spec-splitter** agent with the spec content. It returns an
    assessment, ordered task list with acceptance criteria and dependencies, a
    parallelism map, and any proposed sub-specs.
-2. If the assessment is "small enough as-is": report that and stop. Do not
+3. If the assessment is "small enough as-is": report that and stop. Do not
    manufacture ceremony.
-3. Otherwise, review the decomposition for overlap conflicts (two parallel tasks
+4. Otherwise, review the decomposition for overlap conflicts (two parallel tasks
    touching the same files) and fix the ordering if needed.
-4. Write any proposed sub-specs to `specs/`, each with a `Derived from:` line
+5. Write any proposed sub-specs to `specs/`, each with a `Derived from:` line
    pointing at the parent spec.
-5. File the tasks:
+6. File the tasks:
    - **GitHub issues** (the human-visible queue): one issue per task, title from
      the task title, body = definition of done + dependency notes + link to the
      spec. Label `agent-task`.
@@ -36,7 +43,7 @@ Arguments: path to a spec file (defaults to the spec under discussion).
    - **beads** (agent memory/dependency graph), if `bd` is on PATH: mirror the
      tasks with `bd create`, wire dependencies with blocker relationships so
      `bd ready` only surfaces unblocked work. Skip silently if bd isn't installed.
-6. Report: the task table (title, deps, parallel-safe or serialized) and issue
+7. Report: the task table (title, deps, parallel-safe or serialized) and issue
    numbers. Suggest /dispatch if the user wants agents started on the ready set.
 
 ## Sizing rule (also enforced by spec-splitter)
