@@ -41,15 +41,24 @@ the whole history here is of no one remembering.
 3. **Make the template repo the source of truth** and have the harness read from
    it, inverting the direction.
 4. **Drop the template repo**, and have `/new-experiment` always copy from a
-   local harness checkout.
+   local harness checkout. `/new-experiment` already contains this code path —
+   it is the non-primary-identity branch — so this is cheaper than it looks.
 
 Option 1 is rejected on the evidence above: it addresses a memory problem with a
 thing you have to remember. Option 3 splits the harness across two repos and
 puts template contents outside the review and ADR flow that governs everything
-else here. Option 4 is viable and tempting — it deletes the drift surface
-entirely — but `gh repo create --template` is the mechanism `/new-experiment`
-uses on the primary identity, and losing it would mean scaffolding by file copy
-for every repo, including in cloud sessions with no local checkout.
+else here. Option 4 deletes the drift surface entirely and is genuinely tempting on
+today's usage, since the copy path already exists. It is rejected on where this
+is going rather than where it is: **the template repo is the only way to create
+a project without a local harness checkout.** GitHub's "Use this template"
+button is the checkout-free path, and creating projects from a phone — and
+later, letting agents create them — is a stated goal. Option 4 forecloses it.
+
+That reframes what the mirror is for. Keeping the template current is not
+housekeeping on a convenience; it is what makes checkout-free project creation
+safe. An unmaintained template repo is worse than no template repo: every
+project created from it starts silently stale, which is the exact defect this
+ADR is a response to.
 
 ## Decision
 
@@ -96,14 +105,24 @@ the exact condition this ADR exists to end.
 - **Interacts with ADR 0003:** the stub the mirror ships is pinned `@main`
   today. When `v1` is cut, retargeting it is a one-line change here that reaches
   every future repo automatically — one of the first real payoffs of the mirror.
+- **Not sufficient for phone/agent creation on its own.** "Use this template"
+  produces a repo with `CLAUDE.md` placeholders unfilled, no ruleset, no
+  `proposal` label and no OAuth token secret — everything `/new-experiment`
+  steps 3-5 do. The mirror makes the *contents* trustworthy; making the rest
+  work without a local checkout is separate, unbuilt work.
 - **Revisit trigger:** if the template repo ever needs content that legitimately
   should not live in the harness, the pure-mirror model breaks. Move to an
   exclude list or a merge-based sync then — do not start hand-editing and hoping
-  the sync leaves it alone.
+  the sync leaves it alone. Note that "just delete the template repo" is *not*
+  the escape hatch: it would remove checkout-free creation, so anything that
+  makes the mirror painful should be solved inside the mirror.
 
 ## Alternatives considered
 
 - **`/sync-template` skill** — see above; a memory fix for a memory problem.
+- **Keep the template repo but stop depending on it** — tempting middle ground,
+  but it does not survive the phone-creation goal: an unused template is an
+  unmaintained one, and the button is still there for someone to press.
 - **Auto-merging the sync PR** — removes the human check that catches a bad
   `--delete`, for a saving of one click on a repo that changes rarely.
 - **A PR per sync instead of one long-lived branch** — spawns a PR per push to
