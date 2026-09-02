@@ -50,8 +50,10 @@ Exit criteria: kick off a task from the phone, review the PR next morning.
 
 - [ ] `/refresh-token` skill: update `CLAUDE_CODE_OAUTH_TOKEN` on all active
       repos from `~/.claude/claude-code-oauth-token` in one sweep
-- [ ] Template-repo sync skill or CI: `templates/project/` →
+- [x] Template-repo sync CI: `templates/project/` →
       `JSBaxter/project-template` automatically on push to this repo
+      (`sync-template.yml`, ADR 0004 — chose CI over a skill because the drift
+      it fixes had gone unnoticed for months; a skill needs remembering)
 - [ ] Try beads (`bd`) for cross-repo/cross-week task memory; adopt or drop
 - [ ] Try `CLAUDE_CODE_PLUGIN_SEED_DIR` in a cloud environment setup script
       (documented path to real slash-commands in cloud; ours is untested)

@@ -87,9 +87,12 @@ else. Every environment resolves the same source:
 
 ## Setup that lives outside this repo (once per account)
 
-- **Template repo**: `JSBaxter/project-template` (created 2026-08-31 from
-  `templates/project/`; when the template contents change here, sync them to
-  that repo).
+- **Template repo**: `JSBaxter/project-template` — a **mirror** of
+  `templates/project/`, kept in sync by `.github/workflows/sync-template.yml`
+  (docs/adr/0004). Edit template contents here, never there; a direct edit over
+  there is reverted by the next sync. Needs a `TEMPLATE_SYNC_TOKEN` repo secret
+  on this repo: a fine-grained PAT with Contents:write and Pull requests:write
+  on `JSBaxter/project-template`. The sync opens a PR — merging stays manual.
 - **Claude GitHub app**: `/install-github-app` in any repo once;
   `claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN` secret per repo
   (`/new-experiment` step 4 automates the per-repo part). Known wart: the OAuth

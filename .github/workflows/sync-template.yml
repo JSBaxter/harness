@@ -1,0 +1,119 @@
+# Mirrors templates/project/ into the JSBaxter/project-template repo.
+#
+# Why CI and not a `/sync-template` skill: the failure mode this fixes is
+# SILENCE. The template repo sat months behind — still shipping the
+# pre-ADR-0001 monolithic review workflow, so every repo /new-experiment
+# scaffolded started stale and `proposal` labelling was inert in all of them.
+# A skill only helps someone who remembers to run it, and nobody did. See
+# docs/adr/0004-template-repo-is-a-mirror.md.
+#
+# This opens a PR; it never pushes to the template repo's main. The PR is where
+# a human catches an unintended deletion (the mirror is rsync --delete: a file
+# removed from templates/project/ is removed there too).
+
+name: Sync project template
+
+on:
+  push:
+    branches: [main]
+    paths: ['templates/project/**']
+  # Weekly, to catch drift introduced directly in the template repo — a
+  # path-triggered sync alone can't see edits made over there.
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-template
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The repo's own GITHUB_TOKEN cannot write to another repo, so this needs
+      # a PAT with contents+pull-requests write on JSBaxter/project-template.
+      # Fail loudly rather than skipping: a sync that quietly stops running is
+      # the exact problem this workflow exists to prevent.
+      - name: Require the cross-repo token
+        env:
+          TOKEN: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::TEMPLATE_SYNC_TOKEN is not set on JSBaxter/harness."
+            echo "::error::Create a fine-grained PAT with Contents:write and Pull requests:write"
+            echo "::error::on JSBaxter/project-template, then add it as that repo secret."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          path: harness
+
+      - uses: actions/checkout@v6
+        with:
+          repository: JSBaxter/project-template
+          token: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+          path: project-template
+          fetch-depth: 0
+
+      # --delete makes this a mirror rather than an overlay: files dropped from
+      # templates/project/ are dropped there too. Without it, deletions never
+      # propagate and the template accretes files forever.
+      - name: Mirror templates/project/ into the template repo
+        run: rsync -a --delete --exclude '.git/' harness/templates/project/ project-template/
+
+      - name: Open or update the sync PR
+        working-directory: project-template
+        env:
+          GH_TOKEN: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
+          SRC_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Template repo already matches harness templates/project/ - nothing to sync."
+            exit 0
+          fi
+
+          short="${SRC_SHA:0:7}"
+          branch="sync/template"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -m "chore: sync template contents from harness $short" \
+            -m "Mirrors JSBaxter/harness templates/project/ at $SRC_SHA. Opened automatically by sync-template.yml."
+
+          # One long-lived sync branch, force-updated: repeated syncs refresh a
+          # single PR instead of spawning one per push. Nobody develops on this
+          # branch, so rewriting it is safe.
+          git push --force -u origin "$branch"
+
+          existing="$(gh pr list --repo JSBaxter/project-template --head "$branch" \
+            --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "Updated existing sync PR #$existing."
+            exit 0
+          fi
+
+          cat > /tmp/sync-body.md <<BODY
+          Automated mirror of **templates/project/** from JSBaxter/harness@$short
+
+          https://github.com/JSBaxter/harness/commit/$SRC_SHA
+
+          The template repo is a pure mirror - edit the harness template, never
+          this repo directly (see harness docs/adr/0004).
+
+          **Check the diff for deletions.** The sync is rsync --delete, so a file
+          removed from the harness template is removed here too. If something was
+          deleted that should live only in this repo, the mirror model needs
+          revisiting rather than this PR merging.
+          BODY
+
+          gh pr create --repo JSBaxter/project-template --base main --head "$branch" \
+            --title "Sync template contents from harness" --body-file /tmp/sync-body.md
