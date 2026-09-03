@@ -79,20 +79,44 @@ Run inside a freshly created repo. It:
   `JSBaxter/harness` in a workflow stub, so it needs a different flow.
 - **Replacing the review gate or the ruleset.**
 
+## Constraints (probed 2026-09-03 from a cloud session)
+
+Measured against `JSBaxter/harness-test-drive` through the agent proxy. `gh` is
+absent from cloud containers, but `GH_TOKEN` is set and the proxy injects auth,
+so plain `curl` against `api.github.com` is authenticated — the tool surface is
+not the limit; the proxy's allowlist is.
+
+| Operation | Result |
+|---|---|
+| Read repo settings, rulesets, labels | 200 |
+| Create and delete a label | 201 / 204 |
+| Write repo settings (`PATCH /repos/…`) | **403** — "Repository settings writes are not permitted through this proxy" |
+| Any Actions path (secrets, secrets public-key) | **403** — "Access to this GitHub Actions path is not permitted through this proxy" |
+| Create a ruleset (`POST /rulesets`) | untested |
+
+What follows from that:
+
+- **The OAuth secret is structurally manual.** `CLAUDE_CODE_OAUTH_TOKEN` cannot
+  be written from a cloud session, its value cannot be read back from anywhere,
+  a cross-repo PAT is ruled out, and a personal account has no organisation to
+  hold an org secret. `secrets: inherit` passes the *caller's* secrets, so the
+  harness cannot supply it on a project's behalf either. One manual secret-set
+  per repo is therefore part of the design, not a defect in it.
+- **`--delete-branch-on-merge` is equally unreachable** from a cloud session.
+- **Labels are reachable**, so the `proposal` label needs no human.
+
+This narrows the honest promise from "start a project from your phone" to
+"start a project from your phone, and finish two admin steps once". Whether
+that is worth building is the question the plan has to answer, not assume.
+
 ## Unknowns to settle before /plan
 
-These change the design materially and none is answerable from a cloud session
-by inspection alone.
-
-1. **Where does `CLAUDE_CODE_OAUTH_TOKEN` come from?** Today it is a local file
-   (`~/.claude/claude-code-oauth-token`, mode 600). A cloud session cannot read
-   it, and a repository secret's value cannot be read back out. Without an
-   answer, every checkout-free repo needs one manual secret-set — which is a
-   wide form on a phone, and the exact friction this spec exists to remove.
-   This is the hardest constraint in the whole design.
-2. **What can the agent proxy actually write?** Commit statuses are blocked
-   (verified by live probe, README). Ruleset `POST`, `gh label create`,
-   `gh repo edit`, and `gh secret set` are untested from a cloud session.
+1. **Can a workflow inside the new repo do what a cloud session cannot?** Its
+   own `GITHUB_TOKEN` with `administration: write` may cover repo settings and
+   the ruleset; it cannot write secrets. If it can, the initialise phase belongs
+   in the repo rather than in a session, and only the secret stays manual.
+2. **Does `POST /rulesets` pass the proxy?** Reads do; repo-settings writes do
+   not. Untested because the probe was blocked locally, not by GitHub.
 3. **What triggers the initialise phase** — a cloud session the human opens, a
    Routine watching for new repos, or a workflow committed in the template that
    runs once on first push.
