@@ -93,9 +93,28 @@ not the limit; the proxy's allowlist is.
 | Write repo settings (`PATCH /repos/…`) | **403** — "Repository settings writes are not permitted through this proxy" |
 | Any Actions path (secrets, secrets public-key) | **403** — "Access to this GitHub Actions path is not permitted through this proxy" |
 | Create a ruleset (`POST /rulesets`) | untested |
+| Delete a git ref (branch) — push or REST | **403** — "Write access to this GitHub API path is not permitted through this proxy" |
+
+And from inside a workflow in the repo itself (`harness-test-drive`, `GITHUB_TOKEN`):
+
+| Operation | Result |
+|---|---|
+| Read repo | 200 |
+| `PATCH /repos` (`delete_branch_on_merge`) | **403** — "Resource not accessible by integration" |
+| `POST /rulesets` | **403** — "Resource not accessible by integration" |
+| `GET /actions/secrets/public-key` | **403** — "Resource not accessible by integration" |
+
+`administration` is **not a valid workflow `permissions` scope**: declaring it
+makes the workflow file invalid, and the run fails before any job starts. So
+there is no way to elevate a workflow's own token to do repo admin.
 
 What follows from that:
 
+- **All three setup steps need a credential nothing automatable has.** The
+  ruleset, `delete_branch_on_merge` and the OAuth secret are refused to a cloud
+  session (proxy) *and* to an in-repo workflow (integration token). With a
+  cross-repo PAT ruled out, they require a session holding the user's own
+  GitHub credentials — i.e. a local one.
 - **The OAuth secret is structurally manual.** `CLAUDE_CODE_OAUTH_TOKEN` cannot
   be written from a cloud session, its value cannot be read back from anywhere,
   a cross-repo PAT is ruled out, and a personal account has no organisation to
@@ -111,20 +130,18 @@ that is worth building is the question the plan has to answer, not assume.
 
 ## Unknowns to settle before /plan
 
-1. **Can a workflow inside the new repo do what a cloud session cannot?** Its
-   own `GITHUB_TOKEN` with `administration: write` may cover repo settings and
-   the ruleset; it cannot write secrets. If it can, the initialise phase belongs
-   in the repo rather than in a session, and only the secret stays manual.
-2. **Does `POST /rulesets` pass the proxy?** Reads do; repo-settings writes do
-   not. Untested because the probe was blocked locally, not by GitHub.
-3. **What triggers the initialise phase** — a cloud session the human opens, a
+1. **Does `POST /rulesets` pass the proxy from a cloud session?** Reads do;
+   repo-settings writes do not. Untested — the probe was blocked locally, not by
+   GitHub. Low value now: even if it passes, the other two steps do not.
+2. **What triggers the initialise phase** — a cloud session the human opens, a
    Routine watching for new repos, or a workflow committed in the template that
-   runs once on first push.
-4. **How much the template still needs to carry.** The copies exist because
+   runs once on first push. The probe rules the third option out for the admin
+   steps, but it can still do file personalisation.
+3. **How much the template still needs to carry.** The copies exist because
    plugins do not auto-install in cloud/headless sessions and Actions has no
    plugin at all. `CLAUDE_CODE_PLUGIN_SEED_DIR` (documented, untested) may close
    the first half; the Actions half likely stays.
-5. **Whether `/new-experiment` becomes a thin wrapper** (create, then invoke the
+4. **Whether `/new-experiment` becomes a thin wrapper** (create, then invoke the
    same initialise path) or stays a separate local flow. Two implementations of
    repo setup is the outcome to avoid either way.
 
