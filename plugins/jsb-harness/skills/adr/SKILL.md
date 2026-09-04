@@ -27,22 +27,41 @@ anything fully captured by the spec.
 status: proposed | accepted | superseded by NNNN
 supersedes: none | NNNN
 date: YYYY-MM-DD
+deciders: <who made the call>
 ---
 
-# <Decision title, stated as the decision>
+# NNNN — <Decision title, stated as the decision>
 
-## Context
+## Context and problem statement
 What forces are at play. Why a decision was needed. 2–5 sentences.
 
+## Considered options
+1. **<Option>** — one line on what it is.
+2. **<Option>** — …
+
 ## Decision
-What was decided, stated actively ("We will ...").
+Which option, stated actively ("We will …"), and why it beats the others.
 
 ## Consequences
 What becomes easier, what becomes harder, what we're accepting.
 
 ## Alternatives considered
-- <Alternative> — why not.
+Optional. Use when an option needs more than the one-liner above — a rejected
+approach a future reader will otherwise re-propose.
 ```
+
+**The frontmatter schema is fixed**: those four keys, in that order, in every
+ADR, including `supersedes: none`. That part is not a matter of taste — it is
+what makes the records machine-readable and a forgotten field detectable.
+
+**Headings**: `Context and problem statement`, `Decision` and `Consequences`
+are required. Both option sections are optional and serve different jobs — use
+either, both, or neither:
+
+- `Considered options`, before **Decision** — a numbered list when there were
+  real alternatives worth naming up front.
+- `Alternatives considered`, after **Consequences** — why-not detail for an
+  approach a future reader would otherwise re-propose.
 
 3. **Record supersession in both directions.** Every ADR carries both fields,
    always — `supersedes: none` when it replaces nothing, so a missing link is

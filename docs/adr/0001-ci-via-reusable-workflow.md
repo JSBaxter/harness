@@ -1,9 +1,11 @@
-# 0001 — Distribute the CI review gate as a reusable workflow
+---
+status: accepted
+supersedes: none
+date: 2026-08-31
+deciders: James
+---
 
-- Status: accepted
-- Date: 2026-08-31
-- Supersedes: none
-- Deciders: James
+# 0001 — Distribute the CI review gate as a reusable workflow
 
 ## Context and problem statement
 

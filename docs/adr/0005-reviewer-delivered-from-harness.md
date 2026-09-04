@@ -1,9 +1,11 @@
-# 0005 — The reviewer agent is delivered from the harness, not carried by projects
+---
+status: accepted
+supersedes: none
+date: 2026-09-04
+deciders: James
+---
 
-- Status: accepted
-- Date: 2026-09-04
-- Supersedes: none
-- Deciders: James
+# 0005 — The reviewer agent is delivered from the harness, not carried by projects
 
 ## Context and problem statement
 
