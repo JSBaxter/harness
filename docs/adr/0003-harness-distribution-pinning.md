@@ -1,7 +1,8 @@
 # 0003 — Skills auto-update, executable CI is versioned
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-02
+- Supersedes: none
 - Deciders: James
 
 ## Context and problem statement

@@ -1,5 +1,6 @@
 ---
 status: accepted
+supersedes: none
 date: 2026-08-31
 ---
 

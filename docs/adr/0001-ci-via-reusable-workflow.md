@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-08-31
+- Supersedes: none
 - Deciders: James
 
 ## Context and problem statement

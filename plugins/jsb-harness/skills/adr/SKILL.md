@@ -25,6 +25,7 @@ anything fully captured by the spec.
 ```markdown
 ---
 status: proposed | accepted | superseded by NNNN
+supersedes: none | NNNN
 date: YYYY-MM-DD
 ---
 
@@ -43,8 +44,18 @@ What becomes easier, what becomes harder, what we're accepting.
 - <Alternative> — why not.
 ```
 
-3. If this supersedes an earlier ADR, edit the old one's status to
-   `superseded by NNNN` — never delete or rewrite its content.
+3. **Record supersession in both directions.** Every ADR carries both fields,
+   always — `supersedes: none` when it replaces nothing, so a missing link is
+   distinguishable from a forgotten one. When this ADR does replace an earlier
+   decision:
+   - set this ADR's `supersedes: NNNN`
+   - set the old ADR's `status: superseded by NNNN`
+
+   Never delete or rewrite the old one's content. One direction alone is a
+   trap: marked only on the old ADR, a reader of the new one cannot tell it
+   replaced anything and will not know to read the history; marked only on the
+   new one, someone who opens the old ADR follows a decision that has already
+   been reversed.
 4. If the decision changes current conventions, update `CLAUDE.md` to state the
    new rule and link the ADR (CLAUDE.md holds the "what", ADRs hold the "why").
 5. New ADRs are born `proposed`; the human flips them to `accepted`. Say so in
