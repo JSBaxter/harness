@@ -1,16 +1,15 @@
-# Human-feedback round: @claude in a PR comment / review triggers a round of
-# work — address the feedback, then run the same reviewer loop and re-stamp
-# the claude-review status on the new head.
+# Thin caller for the human-feedback round. All logic lives in the reusable
+# workflow JSBaxter/harness/.github/workflows/claude-fix.yml, so fixes in the
+# harness reach this repo with no edit here — this stub only wires the comment
+# triggers, the per-PR concurrency group, the token scopes, and secrets.
+# See harness docs/adr/0001-ci-via-reusable-workflow.md and 0003 decision 3.
 #
-# Design notes:
-# - Triggered only by human comments (the review gate's actor guard already
-#   skips claude[bot] pushes, and this run stamps the final head itself, so
-#   the two workflows never chain off each other).
-# - issue_comment/review events always run the workflow from the DEFAULT
-#   branch, so this file only needs to exist on main (no identical-content
-#   sync dance with PR branches).
-# - Same verdict-file handoff as claude-review.yml: Claude never writes
-#   statuses; the publish step does, with the workflow token.
+# IMPORTANT — primary-identity repos ONLY. A stealth-identity repo must NOT
+# reference JSBaxter/* (it would link the accounts in plaintext); it keeps a
+# self-contained copy instead.
+#
+# Pin: `@main` tracks the harness tip. Swap to a tag (e.g. `@v1`) for
+# controlled rollout — see ADR 0003 decision 2.
 name: Claude Fix
 
 on:
@@ -21,94 +20,24 @@ on:
   pull_request_review_comment:
     types: [created]
 
+# Shares the gate's per-PR group deliberately: a feedback round and a review
+# run must never work the same PR at once.
+concurrency:
+  group: claude-review-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# A reusable-workflow caller caps the called workflow at the caller's token
+# scopes, and a repo's default GITHUB_TOKEN is read-only — so grant here the
+# scopes the round needs (push fixes, stamp statuses, label, comment) or the
+# call fails to start.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  id-token: write
+
 jobs:
   fix:
-    if: >-
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    concurrency:
-      group: claude-review-${{ github.event.issue.number || github.event.pull_request.number }}
-      cancel-in-progress: true
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      statuses: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Check out PR branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.issue.number || github.event.pull_request.number }}
-        run: gh pr checkout "$PR"
-
-      - name: Feedback round
-        uses: anthropics/claude-code-action@v1
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          show_full_output: true
-          claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
-          prompt: |
-            A human reviewer left feedback on PR #${{ github.event.issue.number || github.event.pull_request.number }}
-            in ${{ github.repository }} and asked for another round of work
-            (their comment mentioned @claude).
-
-            Step 1 — collect ALL the feedback, not just the triggering comment:
-            fetch the PR's reviews, inline review comments, and issue comments
-            with `gh api` / `gh pr view`. Treat every unresolved human comment
-            as feedback to address. Ignore comments authored by bots.
-
-            Step 2 — address it: make the smallest correct changes that honor
-            the feedback. If a piece of feedback is ambiguous or you believe
-            it's wrong, do NOT guess or argue in code — leave it for the
-            summary. Run the project's tests (see CLAUDE.md). Commit with
-            message prefix "review-fix:", reference the comment(s) addressed.
-
-            Step 3 — re-run the review gate on your work, at most 2 rounds:
-            spawn the `reviewer` agent SYNCHRONOUSLY (run_in_background: false
-            — this is a headless run; a background agent dies with your turn)
-            on `git diff origin/${{ github.event.pull_request.base.ref || 'main' }}...HEAD`,
-            fix Important findings only, re-review.
-
-            Step 4 — finalize (mandatory even if you are unsure):
-            - Push any commits you made.
-            - Write two files in the repo root (do NOT commit or push them):
-              * review-verdict.txt — exactly APPROVE or NEEDS_HUMAN
-                (NEEDS_HUMAN also when feedback was ambiguous/disputed and you
-                deliberately didn't act on it).
-              * review-summary.md — markdown addressed to the human reviewer:
-                per comment, what you changed (with commit sha) or why you
-                didn't act on it; then the reviewer loop outcome.
-            - Do NOT set commit statuses, labels, or comments yourself — the
-              publish step does that with the right token.
-
-      - name: Publish verdict
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.issue.number || github.event.pull_request.number }}
-        run: |
-          sha=$(git rev-parse HEAD)
-          verdict=$(head -c 32 review-verdict.txt 2>/dev/null | tr -d '[:space:]' || true)
-          if [ "$verdict" = "APPROVE" ]; then
-            gh api "repos/${{ github.repository }}/statuses/$sha" \
-              -f state=success -f context=claude-review \
-              -f description="approved after human-feedback round"
-            gh pr edit "$PR" --remove-label needs-human 2>/dev/null || true
-          else
-            gh api "repos/${{ github.repository }}/statuses/$sha" \
-              -f state=failure -f context=claude-review \
-              -f description="verdict: ${verdict:-run did not complete} - needs human"
-            gh label create needs-human -c "d93f0b" -d "agent review needs a human" --force || true
-            gh pr edit "$PR" --add-label needs-human || true
-          fi
-          if [ -s review-summary.md ]; then
-            gh pr comment "$PR" --body-file review-summary.md || true
-          fi
+    uses: JSBaxter/harness/.github/workflows/claude-fix.yml@main
+    secrets: inherit
