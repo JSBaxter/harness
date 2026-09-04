@@ -1,11 +1,13 @@
 ---
 status: accepted
+supersedes: none
 date: 2026-08-31
+deciders: James
 ---
 
-# Record architecture decisions
+# 0000 — Record architecture decisions
 
-## Context
+## Context and problem statement
 
 Agents (and future humans) that can't see why something was built the way it was
 will happily refactor the reason away. Decision history needs to live in the

@@ -1,8 +1,11 @@
-# 0002 — Don't adopt GitHub Spec Kit; add a `/plan` phase instead
+---
+status: accepted
+supersedes: none
+date: 2026-09-02
+deciders: James
+---
 
-- Status: proposed
-- Date: 2026-09-02
-- Deciders: James
+# 0002 — Don't adopt GitHub Spec Kit; add a `/plan` phase instead
 
 ## Context and problem statement
 
