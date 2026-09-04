@@ -53,6 +53,21 @@ task; don't open PRs any other way.
    gh label create proposal -c "c5def7" \
      -d "opinion/spec/mockup PR — human review only, skip agent gate" --force
    ```
+   **No `gh`? (cloud sessions.)** `create_pull_request` takes no `labels`
+   parameter, so labelling at creation isn't directly possible — but the gate
+   skips drafts (`!github.event.pull_request.draft`), which gets the same result
+   in three MCP calls:
+   1. `create_pull_request` with `draft: true`
+   2. `issue_write` — method `update`, the PR number, `labels: ["proposal"]`.
+      PRs are issues, so this works, and it creates the label if the repo
+      lacks one.
+   3. `update_pull_request` with `draft: false`
+
+   The gate then sees the PR for the first time already labelled. Do NOT open a
+   non-draft PR meaning to label it afterwards: that spends the exact review
+   round the label exists to save, and it puts the job on the human — who will
+   sometimes be on a phone, and will sometimes forget.
+
    Forgetting this is costly and the failure is silent: the gate reviews an
    unlabelled mockup as if it were production code, and because it re-runs on
    every push, each fix you make in response spawns another round. If you find
