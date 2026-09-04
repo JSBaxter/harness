@@ -60,6 +60,7 @@ else. Every environment resolves the same source:
 | `settings/settings.json` | Shared settings: agent teams on, worktree defaults, safe-command allowlist |
 | `templates/project/` | Contents for the GitHub **template repo**: CLAUDE.md, review workflow, ruleset, ADR seed, specs scaffold |
 | `routines/` | Prompt templates for Claude Code Routines (cloud sessions on GitHub events) |
+| `docs/cloud-capabilities.md` | Verified matrix of what a cloud session, an in-repo workflow and a local session can each do against GitHub |
 | `identities/` | Multi-account machinery: directory = identity; real values live only in local untracked files (see `identities/README.md`) |
 | `bin/gh-as` | Run `gh` pinned to a specific identity's login |
 
