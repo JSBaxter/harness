@@ -41,6 +41,24 @@ task; don't open PRs any other way.
    `gh api repos/<o>/<r>/contents/<path>?ref=<branch>` — `git add -A`
    silently skips gitignored paths, and a broken embed looks identical to
    an unsupported one. Show the changed state, not the idle page.
+
+   **From a cloud session (claude.ai/code), do not embed — you cannot.**
+   That session's egress path rewrites outbound bodies: absolute URLs get
+   wrapped in backticks and the leading `!` is stripped, so every embed
+   arrives as a defanged link. Measured on chord-recommender#26 across six
+   forms — inline, reference-style, `<img>`, raw.githubusercontent,
+   root-relative and protocol-relative — all six neutralised; only
+   `claude.ai` URLs pass, so it is a domain allowlist, not a syntax problem.
+   Two independent sessions have now spent a round rediscovering this
+   (chord-recommender#3 hit it first and wrote it up in its own PR body).
+   Instead: commit the shots under `docs/screenshots/<branch>/`, and in the
+   body give a table of filenames and what to look at, pointing at the
+   **Files changed** tab, where GitHub renders committed PNGs inline.
+
+   Note the remote check above is necessary but NOT sufficient: it proves the
+   file is fetchable, not that your markdown survived the write. If you do
+   embed, read the body back (`gh api repos/<o>/<r>/pulls/<n> --jq .body`)
+   and confirm the `![` is still there.
 8. **Is this a proposal?** A spec, a mockup, an ADR draft, a sketch — anything
    opened to ask James's opinion rather than to land finished work — wears the
    **`proposal`** label. The review gate then skips the agent reviewer and
@@ -62,6 +80,18 @@ task; don't open PRs any other way.
       PRs are issues, so this works, and it creates the label if the repo
       lacks one.
    3. `update_pull_request` with `draft: false`
+
+   **If the GitHub MCP tools are absent too** (they are not guaranteed — a
+   cloud session may have neither `gh` nor them, only the REST API through the
+   proxy's injected `GITHUB_TOKEN`), steps 1 and 2 work as plain REST but step
+   3 has no equivalent: `PATCH /repos/{o}/{r}/pulls/{n}` with `{"draft": false}`
+   returns 200 and silently leaves the PR a draft, and the GraphQL
+   `markPullRequestReadyForReview` mutation is outside the pinned operation set
+   the proxy serves. Open the draft, apply the label, then say plainly in your
+   report that the human needs to click **Ready for review** — it costs them one
+   click they would have made before merging anyway, and it is far cheaper than
+   opening a non-draft PR and spending the agent review round the label exists
+   to save. (chord-recommender#26.)
 
    The gate then sees the PR for the first time already labelled. Do NOT open a
    non-draft PR meaning to label it afterwards: that spends the exact review

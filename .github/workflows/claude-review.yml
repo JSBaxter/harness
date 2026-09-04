@@ -28,12 +28,26 @@ on:
 
 jobs:
   review:
-    # Skip cleanly (green) when the triggering push came from any bot —
-    # Claude's own fix-pushes can surface as claude[bot] OR github-actions
-    # depending on the credential used; both already stamped their head.
+    # Skip when a bot triggered an event on a PR that has ALREADY been through
+    # the gate — Claude's own fix-pushes (which surface as claude[bot] OR
+    # github-actions depending on the credential) and the labels this run
+    # applies. Those already stamped their head, and re-running on them
+    # ping-pongs CI.
+    #
+    # But a bot OPENING a PR is not that: nothing has stamped its head, so it
+    # needs a review like any other. Guarding on the actor alone made an
+    # agent-opened PR skip the job entirely, and because the job is skipped the
+    # `Publish verdict` step never runs despite its `if: always()` — no
+    # `claude-review` status is stamped at all, so the PR sits at `pending` and
+    # cannot merge. Not the "skip cleanly (green)" this guard intended: it is a
+    # silent non-review that fails closed, and every agent-authored PR hit it.
+    # (chord-recommender#27, #28.)
     if: >-
-      !endsWith(github.actor, '[bot]') && github.actor != 'github-actions'
-      && !github.event.pull_request.draft
+      !github.event.pull_request.draft
+      && (
+           !(endsWith(github.actor, '[bot]') || github.actor == 'github-actions')
+           || contains(fromJSON('["opened","reopened","ready_for_review"]'), github.event.action)
+         )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
