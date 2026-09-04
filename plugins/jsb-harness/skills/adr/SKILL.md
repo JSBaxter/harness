@@ -79,3 +79,13 @@ either, both, or neither:
    new rule and link the ADR (CLAUDE.md holds the "what", ADRs hold the "why").
 5. New ADRs are born `proposed`; the human flips them to `accepted`. Say so in
    your report rather than self-accepting.
+
+   **Exception — a merged `proposal` PR is the acceptance.** When the ADR ships
+   in a PR carrying the `proposal` label, the human's merge *is* the decision —
+   that is what the label means: the agent reviewer is skipped and the merge is
+   the review. Flip it to `accepted` and add it to the spec's `## Decisions`
+   list as follow-up, in the next PR touching that area or its own small one.
+   Do not leave it `proposed` and do not ask. The rule above assumes the record
+   and the approval arrive as separate events; for a proposal PR they are the
+   same event, so applying it there leaves every merged ADR mislabelled — which
+   is what happened to chord-recommender ADR 0009.
