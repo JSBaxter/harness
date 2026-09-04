@@ -1,0 +1,39 @@
+name: probe-fetch
+description: >-
+  Probe: can a composite action hosted in the private harness see its own repo's
+  files, and copy them into the calling repo's workspace, with no extra
+  credential? Throwaway — delete once the result is recorded.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -u
+        s() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; echo "$1"; }
+        s "## Composite-action fetch probe"
+        s ""
+        s "\`GITHUB_ACTION_PATH\` = \`$GITHUB_ACTION_PATH\`"
+        s ""
+
+        root="$GITHUB_ACTION_PATH/../../.."
+        s "### What is at the presumed repo root"
+        s '```'
+        ls -A "$root" 2>&1 | head -20 | while read -r l; do s "$l"; done
+        s '```'
+
+        s "### Can it see harness files outside the action directory?"
+        for f in templates/project/.claude/agents/reviewer.md \
+                 plugins/jsb-harness/skills/ship/SKILL.md \
+                 docs/adr/0003-harness-distribution-pinning.md; do
+          if [ -f "$root/$f" ]; then s "- FOUND    \`$f\`"; else s "- missing  \`$f\`"; fi
+        done
+
+        s "### Can it write into the caller's workspace?"
+        mkdir -p "$GITHUB_WORKSPACE/.claude/agents"
+        if cp "$root/templates/project/.claude/agents/reviewer.md" \
+              "$GITHUB_WORKSPACE/.claude/agents/reviewer.md" 2>/dev/null; then
+          s "- COPY OK — wrote .claude/agents/reviewer.md ($(wc -l < "$GITHUB_WORKSPACE/.claude/agents/reviewer.md") lines)"
+        else
+          s "- copy FAILED"
+        fi
