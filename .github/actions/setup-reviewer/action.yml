@@ -1,0 +1,48 @@
+name: setup-reviewer
+description: >-
+  Deliver the reviewer agent into the calling repo's workspace. A project may
+  opt out by committing .claude/agents/reviewer-override.md; otherwise the
+  harness's canonical reviewer is used. Outputs the agent name to spawn.
+  Project repos therefore carry no copy of the reviewer — see harness ADR 0005.
+
+outputs:
+  agent-name:
+    description: Name of the agent the caller should spawn.
+    value: ${{ steps.pick.outputs.agent-name }}
+
+runs:
+  using: composite
+  steps:
+    - id: pick
+      shell: bash
+      run: |
+        set -euo pipefail
+        override="$GITHUB_WORKSPACE/.claude/agents/reviewer-override.md"
+
+        if [ -f "$override" ]; then
+          # Read the override's own declared name rather than assuming one.
+          name=$(sed -n 's/^name:[[:space:]]*//p' "$override" | head -1)
+          if [ -z "$name" ]; then
+            echo "::error::.claude/agents/reviewer-override.md has no 'name:' in its frontmatter"
+            exit 1
+          fi
+          # Deliberately do NOT write the harness default alongside it: one
+          # reviewer on disk, matching what the repo declares.
+          echo "agent-name=$name" >> "$GITHUB_OUTPUT"
+          msg="**project override** — \`.claude/agents/reviewer-override.md\`, agent \`$name\`"
+        else
+          src="$GITHUB_ACTION_PATH/../../../plugins/jsb-harness/agents/reviewer.md"
+          if [ ! -f "$src" ]; then
+            echo "::error::harness reviewer not found at $src"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.claude/agents"
+          cp "$src" "$GITHUB_WORKSPACE/.claude/agents/reviewer.md"
+          echo "agent-name=reviewer" >> "$GITHUB_OUTPUT"
+          msg="**harness default** — delivered from JSBaxter/harness"
+        fi
+
+        # Presence of an override proves intent, not selection. This line is
+        # what proves selection; don't remove it.
+        echo "Reviewer: $msg"
+        echo "Reviewer: $msg" >> "$GITHUB_STEP_SUMMARY"

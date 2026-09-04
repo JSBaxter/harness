@@ -48,6 +48,13 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
+      # The reviewer agent is NOT carried by project repos — it is delivered
+      # from the harness at run time, so one definition serves every repo (ADR
+      # 0005). A repo opts out by committing .claude/agents/reviewer-override.md.
+      - name: Deliver the reviewer agent
+        id: reviewer
+        uses: JSBaxter/harness/.github/actions/setup-reviewer@main
+
       # Decide whether this PR gets agent-reviewed at all. Two kinds skip the
       # reviewer and stamp claude-review green directly (James's own merge is the
       # gate for both). We still run + stamp rather than paths-ignore, so the
@@ -71,7 +78,7 @@ jobs:
             changed=$(gh api --paginate \
               "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
               --jq '.[].filename')
-            if grep -qE '^(\.github/workflows/claude-review\.yml|\.claude/agents/reviewer\.md)$' <<<"$changed"; then
+            if grep -qE '^(\.github/workflows/claude-review\.yml|\.claude/agents/reviewer-override\.md)$' <<<"$changed"; then
               reason="Review-gate change — claude-review does not review itself"
             fi
           fi
@@ -93,12 +100,13 @@ jobs:
           prompt: |
             You are the review gate for PR #${{ github.event.pull_request.number }}
             (base: ${{ github.event.pull_request.base.ref }}). You are the FIXER;
-            you never judge your own work — judging is done by the `reviewer`
-            subagent, spawned FRESH each round so it never sees the reasoning
-            behind the code it reviews.
+            you never judge your own work — judging is done by the
+            `${{ steps.reviewer.outputs.agent-name }}` subagent, spawned FRESH
+            each round so it never sees the reasoning behind the code it
+            reviews.
 
             Loop, at most 3 rounds:
-            1. Spawn the `reviewer` agent on the diff
+            1. Spawn the `${{ steps.reviewer.outputs.agent-name }}` agent on the diff
                (`git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`).
                Spawn it SYNCHRONOUSLY (run_in_background: false) and wait for
                its result — never in the background: this is a headless run,

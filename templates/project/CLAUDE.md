@@ -18,9 +18,12 @@
   implementation PRs are never labelled `proposal`. `/spec` applies the label
   for you; add it by hand for mockup/RFC PRs.
 - **claude-review never reviews itself.** A PR that changes the review workflow
-  (`.github/workflows/claude-review.yml`) or the reviewer agent
-  (`.claude/agents/reviewer.md`) auto-skips the reviewer and passes — the gate
-  can't judge a change to its own definition, so the human merge is the gate.
+  (`.github/workflows/claude-review.yml`) or a reviewer override
+  (`.claude/agents/reviewer-override.md`) auto-skips the reviewer and passes —
+  the gate can't judge a change to its own definition, so the human merge is
+  the gate. The reviewer itself is not in this repo: the gate delivers it from
+  the harness at run time. Commit `reviewer-override.md` only to deliberately
+  replace it — you then stop tracking harness improvements to it.
 - **Definition of done lives in the issue.** If the issue you're working has no
   acceptance criteria, send it back through `/split-spec` before writing code.
 - **Approach before tasks, when there's a real choice.** If a spec involves
