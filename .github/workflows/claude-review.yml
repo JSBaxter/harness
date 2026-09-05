@@ -109,6 +109,16 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The action refuses non-human actors unless they are named here, so
+          # without this an agent-opened PR reaches the gate (since #20 stopped
+          # skipping those) and then dies inside the action with "Workflow
+          # initiated by non-human actor: claude (type: Bot)". #20 fixed the
+          # skip condition; this fixes the layer it exposed.
+          #
+          # Named rather than "*" deliberately: allowed bots are NOT checked for
+          # repository permissions, so a wildcard would let any App that can
+          # trigger a workflow here invoke the gate. We only ever need our own.
+          allowed_bots: "claude"
           show_full_output: true
           claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
           prompt: |
