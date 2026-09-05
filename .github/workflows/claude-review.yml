@@ -120,7 +120,26 @@ jobs:
           # trigger a workflow here invoke the gate. We only ever need our own.
           allowed_bots: "claude"
           show_full_output: true
-          claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash(git *),Bash(gh *),Task"'
+          # Bash is unrestricted, deliberately. The prompt below orders the
+          # fixer to run the project's tests, while the allowlist permitted
+          # only `git` and `gh` — so on any repo with a real toolchain the
+          # fixer was told to do the one thing it was forbidden from doing. It
+          # could not reproduce a failure, could not verify a fix, and could
+          # not see that the wall was the reason: on chord-recommender#29 it
+          # spent ~30 minutes trying variations of a blocked `python3` before
+          # giving up.
+          #
+          # Enumerating interpreters instead (node, npm, python3, uv, ...) only
+          # moves that wall. CLAUDE.md decides the test command, so the set is
+          # open-ended, and every new project language would re-break the gate
+          # the same way — silently, since a blocked fixer still stamps a
+          # verdict.
+          #
+          # The security delta is small: `Write` plus `Bash(git *)` — which
+          # includes `gh api` — already granted most of what full Bash does, on
+          # an ephemeral runner whose token is scoped to this repo, and
+          # claude-code-action security-skips any PR that edits this workflow.
+          claude_args: '--max-turns 80 --allowedTools "Read,Glob,Grep,Edit,Write,Bash,Task"'
           prompt: |
             You are the review gate for PR #${{ github.event.pull_request.number }}
             (base: ${{ github.event.pull_request.base.ref }}). You are the FIXER;
@@ -128,6 +147,16 @@ jobs:
             `${{ steps.reviewer.outputs.agent-name }}` subagent, spawned FRESH
             each round so it never sees the reasoning behind the code it
             reviews.
+
+            If a tool call is BLOCKED — a denied Bash command, a path outside
+            the workspace, a tool that isn't installed — do not hunt for a way
+            around it and do not retry variations. Stop that line of work at
+            once and record the blockage verbatim in review-summary.md: what
+            you tried, what the refusal said, and what you could not verify
+            because of it. A gate that quietly works around its own limits
+            reports a verdict it did not earn, and the limit stays invisible
+            and therefore unfixed. "I could not run the tests" is a useful
+            result; spending your turns concealing that is not.
 
             You are running ONLY because the workflow already decided this PR
             gets reviewed — proposals and gate self-changes are classified and
@@ -145,6 +174,14 @@ jobs:
                its result — never in the background: this is a headless run,
                and it ends the moment your turn ends, killing any background
                agent before its notification can arrive.
+               If that agent type cannot be spawned, STOP. Do not substitute a
+               general-purpose agent, and do not review the diff yourself:
+               write NEEDS_HUMAN with the spawn error in review-summary.md.
+               The reviewer's independence is the only thing standing between
+               this gate and self-approval, and a substitution reads exactly
+               like a real review in the output — chord-recommender#31 shipped
+               six Important findings from a general-purpose stand-in, and only
+               a footnote said so.
             2. If VERDICT is APPROVE: exit the loop.
             3. Otherwise fix ONLY the Important findings — smallest correct fix,
                no opportunistic refactoring. Run the project's tests
