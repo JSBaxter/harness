@@ -35,9 +35,16 @@ on:
 # actually asked for; a skipping run clears the slot in seconds. The gate keeps
 # cancel-in-progress: true, because there a new push SHOULD supersede a review
 # of the old head.
+# And queue: max, because queueing alone is not enough. A concurrency group holds
+# at most one pending run by default, and a new arrival evicts the pending one
+# *regardless of cancel-in-progress* — so a genuine `@claude` request queued
+# behind a long review could be silently dropped by any later comment. queue:max
+# raises that to 100, served FIFO, and is only valid with cancel-in-progress
+# false. (Found by the review gate on chord-recommender#30.)
 concurrency:
   group: claude-review-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
+  queue: max
 
 # A reusable-workflow caller caps the called workflow at the caller's token
 # scopes, and a repo's default GITHUB_TOKEN is read-only — so grant here the
