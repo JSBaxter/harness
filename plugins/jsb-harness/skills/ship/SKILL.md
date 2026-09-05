@@ -83,20 +83,42 @@ task; don't open PRs any other way.
 
    **If the GitHub MCP tools are absent too** (they are not guaranteed — a
    cloud session may have neither `gh` nor them, only the REST API through the
-   proxy's injected `GITHUB_TOKEN`), steps 1 and 2 work as plain REST but step
-   3 has no equivalent: `PATCH /repos/{o}/{r}/pulls/{n}` with `{"draft": false}`
-   returns 200 and silently leaves the PR a draft, and the GraphQL
-   `markPullRequestReadyForReview` mutation is outside the pinned operation set
-   the proxy serves. Open the draft, apply the label, then say plainly in your
-   report that the human needs to click **Ready for review** — it costs them one
-   click they would have made before merging anyway, and it is far cheaper than
-   opening a non-draft PR and spending the agent review round the label exists
-   to save. (chord-recommender#26.)
+   proxy's injected `GITHUB_TOKEN`), the draft route is a dead end and you must
+   not take it. A draft cannot be un-drafted from there:
 
-   The gate then sees the PR for the first time already labelled. Do NOT open a
-   non-draft PR meaning to label it afterwards: that spends the exact review
-   round the label exists to save, and it puts the job on the human — who will
-   sometimes be on a phone, and will sometimes forget.
+   - `PATCH /repos/{o}/{r}/pulls/{n}` with `{"draft": false}` returns 200 and
+     does nothing. That is upstream GitHub behaviour — the REST PR endpoint does
+     not accept `draft` at all — not a sandbox restriction, so no amount of
+     retrying or reshaping the payload will help.
+   - The GraphQL `markPullRequestReadyForReview` mutation is the only real
+     route, and `/graphql` is not repository-scoped, so the session's GitHub
+     proxy will not serve it.
+
+   So with REST only: **open the PR non-draft, then label it in your very next
+   call**, with the labels endpoint — which is repository-scoped, works on a PR
+   at any time, and needs no un-drafting:
+
+   ```
+   POST /repos/{owner}/{repo}/issues/{number}/labels   {"labels": ["proposal"]}
+   ```
+
+   This is safe despite the warning below, for two reasons worth knowing rather
+   than trusting: the caller's concurrency group is per-PR with
+   `cancel-in-progress: true`, so the `labeled` run cancels the `opened` run
+   still in flight; and the gate's classify step reads labels at run time, so if
+   the label lands first the `opened` run skips on its own. The cost is seconds
+   of a runner, not a review round. Label **immediately** — do no other work
+   between the two calls, because that window is the whole margin.
+
+   Do not instead leave the PR as a draft and ask the human to click **Ready for
+   review**. It looks cheap and is not: the PR sits invisible until they notice,
+   and they will sometimes be on a phone, and will sometimes forget.
+
+   The gate then sees the PR labelled, or cancels the run that saw it unlabelled.
+   Where you *do* have `gh` or the MCP tools, still apply the label at creation
+   rather than afterwards: with those routes it costs nothing, and an
+   `opened` run that completes before the label lands spends the exact review
+   round the label exists to save.
 
    Forgetting this is costly and the failure is silent: the gate reviews an
    unlabelled mockup as if it were production code, and because it re-runs on
