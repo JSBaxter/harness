@@ -22,9 +22,22 @@ on:
 
 # Shares the gate's per-PR group deliberately: a feedback round and a review
 # run must never work the same PR at once.
+#
+# But NOT cancel-in-progress. GitHub evaluates concurrency at workflow level,
+# before any job `if` — so a run that is certain to skip (any comment without
+# `@claude`, which is most of them) still enters this group. With cancelling on,
+# it killed the gate's in-flight review, which then stamped "run did not
+# complete - needs human" on a PR nobody had reviewed. Every comment on a PR
+# under review did this, including the gate's own review-summary comment and any
+# human reply. (chord-recommender#29.)
+#
+# With cancelling off the run queues instead, which is what "never at once"
+# actually asked for; a skipping run clears the slot in seconds. The gate keeps
+# cancel-in-progress: true, because there a new push SHOULD supersede a review
+# of the old head.
 concurrency:
   group: claude-review-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # A reusable-workflow caller caps the called workflow at the caller's token
 # scopes, and a repo's default GITHUB_TOKEN is read-only — so grant here the
