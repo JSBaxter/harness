@@ -19,6 +19,24 @@ runs:
         set -euo pipefail
         override="$GITHUB_WORKSPACE/.claude/agents/reviewer-override.md"
 
+        # Deliver to the USER agent dir as well as the workspace. The workspace
+        # copy alone does not register: claude-code-action runs Claude from its
+        # own checkout (`.claude-pr/`), not from $GITHUB_WORKSPACE, so a
+        # workspace-relative `.claude/agents/` is not the one it scans. The
+        # symptom is silent and total —
+        #
+        #   Agent type 'reviewer' not found. Available agents: claude,
+        #   claude-code-guide, Explore, general-purpose, Plan, statusline-setup
+        #
+        # — no project agent registers at all, and until the gate was told to
+        # stop on a failed spawn (harness #26) it quietly reviewed with a
+        # general-purpose stand-in instead. chord-recommender#31 shipped six
+        # Important findings that way, disclosing the substitution in a
+        # footnote. $HOME/.claude/agents is read regardless of cwd, so it is
+        # the delivery point that actually holds.
+        user_agents="${HOME}/.claude/agents"
+        mkdir -p "$user_agents"
+
         if [ -f "$override" ]; then
           # Read the override's own declared name rather than assuming one.
           name=$(sed -n 's/^name:[[:space:]]*//p' "$override" | head -1)
@@ -28,6 +46,7 @@ runs:
           fi
           # Deliberately do NOT write the harness default alongside it: one
           # reviewer on disk, matching what the repo declares.
+          cp "$override" "$user_agents/$name.md"
           echo "agent-name=$name" >> "$GITHUB_OUTPUT"
           msg="**project override** — \`.claude/agents/reviewer-override.md\`, agent \`$name\`"
         else
@@ -38,6 +57,7 @@ runs:
           fi
           mkdir -p "$GITHUB_WORKSPACE/.claude/agents"
           cp "$src" "$GITHUB_WORKSPACE/.claude/agents/reviewer.md"
+          cp "$src" "$user_agents/reviewer.md"
           echo "agent-name=reviewer" >> "$GITHUB_OUTPUT"
           msg="**harness default** — delivered from JSBaxter/harness"
         fi
@@ -46,3 +66,11 @@ runs:
         # what proves selection; don't remove it.
         echo "Reviewer: $msg"
         echo "Reviewer: $msg" >> "$GITHUB_STEP_SUMMARY"
+
+        # Prove delivery, not just intent. A missing file here means the gate
+        # is about to fail its spawn, and failing loudly in this step is far
+        # cheaper than a NEEDS_HUMAN ten minutes into an agent run.
+        for f in "$user_agents"/*.md; do
+          [ -e "$f" ] || { echo "::error::no reviewer delivered to $user_agents"; exit 1; }
+        done
+        echo "Delivered to: $user_agents ($(ls -1 "$user_agents" | tr '\n' ' '))"
