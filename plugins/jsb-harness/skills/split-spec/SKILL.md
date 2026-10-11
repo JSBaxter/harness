@@ -34,24 +34,31 @@ never with raw `gh` issue writes.
    removed**, **Acceptance criteria**, **Non-goals**, **Constraints**, **Open
    questions**, **Linked issue**. A field is present when a line of the delta
    starts with its name (as `Field:`, `**Field**`, or a `#### Field` heading;
-   case does not matter); a field whose value is `none` is present. Check each
-   `###` entry under `## Pending changes`:
+   case does not matter); a field whose value is `none` is present. Each
+   `###` entry under `## Pending changes` is checked on its own, and the
+   spec's top-level sections (`## Non-goals`, `## Constraints`, ...) do not
+   stand in for a delta's fields:
    ```bash
-   delta=$(sed -n '/^## Pending changes/,/^## /p' specs/<file>)
-   for f in "What changes" "What stays" "What is removed" "Acceptance criteria" \
-            "Non-goals" "Constraints" "Open questions" "Linked issue"; do
-     grep -qiE "^(#+ |\*\*)?$f" <<<"$delta" || echo "Incomplete delta: missing $f"
-   done
+   awk '
+     /^## /        { pc = ($0 == "## Pending changes") }
+     pc && /^### / { if (name) check(); name = $0; body = ""; next }
+     pc && name    { body = body "\n" $0 }
+     END           { if (name) check() }
+     function check(  i, n, f) {
+       n = split("What changes|What stays|What is removed|Acceptance criteria|" \
+                 "Non-goals|Constraints|Open questions|Linked issue", f, "|")
+       for (i = 1; i <= n; i++)
+         if (tolower(body) !~ "\n(#+ |\\*\\*)?" tolower(f[i]))
+           print "Incomplete delta: missing " f[i]
+     }' specs/<file>
    ```
-   (With several entries, run the loop per entry, not over the whole section,
-   or one entry's fields would cover another's gaps.) For a new spec, whose
-   Pending changes says it is new and whose Behavior is the whole contract,
-   check the top-level sections instead: `## Behavior` stands in for the three
-   "What" fields, and `## Acceptance criteria`, `## Non-goals`,
-   `## Constraints`, `## Open questions` and a `Linked issue:` line must each
-   be present. For every missing field print `Incomplete delta: missing
-   <field>` on its own line, then stop: do not invoke spec-splitter and file
-   no issues. Send the spec back through /spec to complete it.
+   The one exception is a new spec: its Pending changes says the spec is
+   new and its Behavior is the whole contract, so check the top-level
+   sections instead. `## Behavior` stands in for the three "What" fields,
+   and `## Acceptance criteria`, `## Non-goals`, `## Constraints`,
+   `## Open questions` and a `Linked issue:` line must each be present. If
+   anything printed, stop: do not invoke spec-splitter and file no issues.
+   Send the spec back through /spec to complete it.
 2. Invoke the **spec-splitter** agent with the spec content and the three
    sizing values from the rule below. It returns an assessment, ordered task
    list with acceptance criteria and dependencies, a parallelism map, and any
