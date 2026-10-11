@@ -85,8 +85,10 @@
 #   with the workflow token, they fire events (the review gate skips the
 #   PR on its `proposal` label; cell-scope allows the bot for that reason).
 #   Unverified until the first real run: an `issues: closed` event runs
-#   only the default-branch copy of a caller, so no probe from a branch
-#   can start the session.
+#   only the caller stub on the cell's default branch, so a probe needs a
+#   stub there, pointing at the harness ref under test; the test-drive
+#   check for this file ran the Find parent step from a branch and did
+#   not touch that cell's default branch.
 name: Cell Converge (reusable)
 
 on:
