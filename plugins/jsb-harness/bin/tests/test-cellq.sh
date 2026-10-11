@@ -165,7 +165,11 @@ else
   expect_rc 1 scope "$s" --dod "$tmp/dod.md" --route weird --priority 2 --repo "$R"   # bad route
   expect_rc 1 scope "$s" --dod "$tmp/dod.md" --route small --priority 9 --repo "$R"   # priority out of range
   expect_rc 1 scope "$s" --dod "$tmp/nope.md" --route small --priority 2 --repo "$R"  # missing dod file
+  printf '## Definition of done\n\n' >"$tmp/bare.md"
+  expect_rc 1 scope "$s" --dod "$tmp/bare.md" --route small --priority 2 --repo "$R"  # heading only
   one_state "$s" new                                                                   # nothing written by the failures
+  labels_of "$s" | grep -E '^(route|priority):' >/dev/null && bad "failed scope wrote labels" || ok
+  [ "$(body_of "$s")" = "" ] && ok || bad "failed scope wrote a body: $(body_of "$s")"
   expect_out "{\"number\": $s, \"route\": \"small\", \"priority\": 2, \"state\": \"ready\"}" \
     scope "$s" --dod "$tmp/dod.md" --route small --priority 2 --repo "$R"
   one_label "$s" route small; one_label "$s" priority 2; one_state "$s" ready
@@ -195,6 +199,13 @@ else
   expect_rc 1 claim "$k" --repo "$R"                                       # in-progress refuses too
   expect_out "{\"number\": $k, \"state\": \"done\"}" complete "$k" --repo "$R"
   one_state "$k" done; issue_is "$k" closed completed
+  # an explicit --session wins over the environment; an empty one is refused
+  cq state "$k" ready >/dev/null
+  expect_rc 1 claim "$k" --session "" --repo "$R"
+  one_state "$k" ready
+  out=$(CLAUDE_SESSION_ID=from-env cq claim "$k" --session explicit-ref)
+  [ "$(jq -r .claimed_by <<<"$out")" = "explicit-ref" ] && ok || bad "claim --session output: $out"
+  api "issues/$k/comments" --jq '.[].body' | grep -E '^claimed by explicit-ref at ' >/dev/null && ok || bad "claim --session comment missing"
 
   echo "== online: depend"
   d=$(cq idea "cellq test depend" | jq -r .number); created+=("$d")

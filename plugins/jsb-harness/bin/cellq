@@ -244,20 +244,27 @@ def cmd_link(gh, a):
 
 # ----------------------------------------------------------- body sections
 
+def prose_lines(lines):
+    """(index, line) for every line outside a fenced code block, so a
+    `# comment` or a quoted `Depends on:` inside one is never read as
+    markup. A fence closes on a fence of the same character."""
+    fence = None
+    for i, line in enumerate(lines):
+        m = re.match(r"[ \t]*(`{3,}|~{3,})", line)
+        if m and (fence is None or m.group(1)[0] == fence):
+            fence = None if fence else m.group(1)[0]
+        elif fence is None:
+            yield i, line
+
+
 def find_section(lines, title):
     """(start, end) of the first heading section titled `title`, at any
     heading level, end exclusive; None when absent. The section runs to the
     next heading of the same or a higher level, to a body-convention line,
     or to the end. Fenced code blocks are skipped, so a `# comment` inside
     a quoted command is not a heading."""
-    fenced = False
     start = level = None
-    for i, line in enumerate(lines):
-        if re.match(r"\s*(```|~~~)", line):
-            fenced = not fenced
-            continue
-        if fenced:
-            continue
+    for i, line in prose_lines(lines):
         h = re.fullmatch(r"(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*", line)
         if start is None:
             if h and h.group(2).casefold() == title.casefold():
@@ -308,12 +315,18 @@ def with_dod_section(body, text):
     return newline_of(body).join(splice(lines, *span, new)) + newline_of(body)
 
 
+def find_depends_line(lines):
+    """Index of the `Depends on:` line, outside any code fence; None if absent."""
+    return next((i for i, l in prose_lines(lines) if DEPENDS_LINE.fullmatch(l)), None)
+
+
 def depends_on(body):
-    """The issue numbers on the `Depends on:` line, in order."""
-    for line in body.splitlines():
-        if DEPENDS_LINE.fullmatch(line):
-            return [int(n) for n in re.findall(r"#(\d+)", line)]
-    return []
+    """The issue numbers on the `Depends on:` line, in order, each once."""
+    lines = body.splitlines()
+    at = find_depends_line(lines)
+    if at is None:
+        return []
+    return list(dict.fromkeys(int(n) for n in re.findall(r"#(\d+)", lines[at])))
 
 
 def with_depends_line(body, numbers):
@@ -321,10 +334,9 @@ def with_depends_line(body, numbers):
     definition-of-done section (else at the end) when absent."""
     line = "Depends on: " + ", ".join(f"#{n}" for n in numbers)
     lines = body.splitlines()
-    for i, old in enumerate(lines):
-        if DEPENDS_LINE.fullmatch(old):
-            lines[i] = line
-            break
+    at = find_depends_line(lines)
+    if at is not None:
+        lines[at] = line
     else:
         span = find_section(lines, DOD_TITLE)
         at = span[1] if span else len(lines)
@@ -340,8 +352,8 @@ def cmd_scope(gh, a):
     if a.blocked is not None and not a.blocked.strip():
         raise Failure("--blocked needs a reason")
     dod = read_file(a.dod, "--dod")
-    if not dod.strip():
-        raise Failure(f"--dod file {a.dod} is empty")
+    if not re.sub(r"\A\s*#{1,6}[ \t]+" + re.escape(DOD_TITLE) + r"[ \t]*#*[ \t]*$", "", dod, flags=re.M | re.I).strip():
+        raise Failure(f"--dod file {a.dod} has no text under the heading")
     issue = gh.call("GET", f"/issues/{a.number}")
     body = with_dod_section(issue.get("body") or "", dod)
     if body != (issue.get("body") or ""):
@@ -356,7 +368,11 @@ def cmd_scope(gh, a):
 
 
 def session_ref(explicit):
-    for value in (explicit, os.environ.get("CLAUDE_SESSION_ID"), os.environ.get("GITHUB_RUN_ID")):
+    if explicit is not None:
+        if not explicit.strip():
+            raise Failure("--session needs a ref")
+        return explicit
+    for value in (os.environ.get("CLAUDE_SESSION_ID"), os.environ.get("GITHUB_RUN_ID")):
         if value:
             return value
     try:
@@ -403,7 +419,8 @@ def cmd_request_feature(gh, a):
         raise Failure("--kind needs a value")
     hint = "_No response_"
     if a.priority_hint is not None:
-        validate_label("priority", str(a.priority_hint))
+        if not 1 <= a.priority_hint <= 5:
+            raise Failure(f"invalid --priority-hint: {a.priority_hint} (1 to 5)")
         hint = str(a.priority_hint)
     example, why = read_file(a.example, "--example"), read_file(a.why, "--why")
     cell = gh.repo.split("/", 1)[1]
@@ -429,8 +446,9 @@ def cmd_request_feature(gh, a):
         f"Kind: {a.kind.strip()}\n\n### Example\n\n{example.strip()}\n\n### Why\n\n{why.strip()}\n"
     )
     mirror_labels = [validate_label("state", "blocked"), validate_label("source", "own")]
-    # From here a failure leaves the remote request open: say so, with its
-    # URL, so the operator can finish or drop it rather than file a twin.
+    # From here a failure leaves issues open: say which, with URLs, so the
+    # operator can finish the links by hand rather than file twins.
+    mirror = None
     try:
         mirror = create_issue(gh, f"Request to {a.to}: {a.title}", mirror_body, mirror_labels)
         remote_gh.call("PATCH", f"/issues/{remote['number']}",
@@ -438,8 +456,12 @@ def cmd_request_feature(gh, a):
         remote_gh.call("POST", f"/issues/{remote['number']}/comments",
                        {"body": f"Requested by {gh.repo}#{mirror['number']}: {mirror['html_url']}"})
     except Failure as e:
-        raise Failure(f"{e}; remote request already opened at {remote['html_url']}, "
-                      f"not yet linked to a mirror here")
+        left = f"remote request already opened at {remote['html_url']}"
+        if mirror is None:
+            left += ", no mirror here yet"
+        else:
+            left += f" and mirror at {mirror['html_url']}, remote not yet commented with the mirror"
+        raise Failure(f"{e}; {left}")
     return {"remote": {"number": remote["number"], "url": remote["html_url"]},
             "mirror": {"number": mirror["number"], "url": mirror["html_url"]}}
 
@@ -447,7 +469,10 @@ def cmd_request_feature(gh, a):
 def cmd_merged_count(gh, _a):
     # The search endpoint's total_count, never a listing (cell-operation.md
     # risk table): one call however many PRs have merged.
-    data = gh.request("GET", f"{gh.base}/search/issues?q=repo:{gh.repo}+is:pr+is:merged")
+    url = f"{gh.base}/search/issues?q=repo:{gh.repo}+is:pr+is:merged"
+    data = gh.request("GET", url)
+    if not isinstance(data, dict) or not isinstance(data.get("total_count"), int):
+        raise Failure(f"GET {url}: response has no total_count")
     return {"count": data["total_count"]}
 
 
