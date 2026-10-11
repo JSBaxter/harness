@@ -41,8 +41,11 @@ those lines into the report.
 
 1. **Open the ceremony issue and the specs.** Read the ceremony issue
    (`gh issue view <n> --json title,labels,state`): it must be open, carry
-   `source:ceremony`, and its title must name health; otherwise stop and
-   report what it is. Then list the specs in scope: every `specs/*.md`
+   `source:ceremony`, and its title must start `Ceremony: health` (the
+   form the cell-ceremony workflow files; a finding a ceremony opened
+   carries the same label without that prefix and is not one); otherwise
+   stop and report what it is. Then list the specs in scope: every
+   `specs/*.md`
    that is not a `*.plan.md` and whose `Status:` line reads `active` or
    `draft`. A spec marked `superseded by <file>` is out of scope and
    appears in the report only as a line saying so. For each spec in scope,
@@ -236,21 +239,19 @@ those lines into the report.
      <state>. If this statement should not hold, the fix is to edit or
      remove it in `specs/<spec>.md`; closing this issue again will file it
      again." Write a body file naming the spec and its line, the
-     statement, the evidence line from step 3, the commit checked, and a
-     `## Definition of done` section whose acceptance statement is that
-     the statement has a test that asserts it, named after `— test:` in
-     the spec, passing on the default branch (or, when the gap or gate was
-     the reason, that the gap is closed or the gate green). Then open it
-     and scope it, because the `scope` skill stops on `source:ceremony`
-     and a ceremony scopes what it opens: route `small` (one test, one
-     PR), priority as `scope` step 5 computes for a `source:ceremony`
-     issue (the default hint it uses when the body has none, times `cellq
-     threshold edges.default`, rounded halves up, clamped to the
-     `priority:` range):
+     statement, the evidence line from step 3, the commit checked, and
+     what closing it looks like: the statement has a test that asserts
+     it, named after `— test:` in the spec, passing on the default branch
+     (or, when the gap or gate was the reason, the gap is closed or the
+     gate green). Then open it and leave it in `new`:
      ```bash
      cellq idea "Unmet: <statement>" --body <file> --source ceremony
-     cellq scope <n> --dod <dod-file> --route small --priority <p>
      ```
+     No route, priority, state or `## Definition of done` section: `scope`
+     writes those, and it treats a `source:ceremony` finding like any
+     other issue (it skips only the ceremony issue itself, the one whose
+     title starts `Ceremony: `). The cell-scope workflow, grooming's
+     routing of what is still new, or `/scope <n>` by hand gets it there.
      A statement too long for a title is cut at the first clause and the
      body carries it whole. When the gate itself is red, every statement
      is unmet for at least that reason; the statements whose only reason

@@ -29,16 +29,18 @@ GitHub MCP write tool. Reading is free.
 
 1. **Open the ceremony issue and the rulebook.** Read the ceremony issue
    (`gh issue view <n> --json title,labels,state`): it must be open, carry
-   `source:ceremony`, and name the structural review; otherwise stop and
-   report what it is. Then read, in full, `CLAUDE.md`, every file in
+   `source:ceremony`, and its title must start `Ceremony: structural` (the
+   form the cell-ceremony workflow files); otherwise stop and report what
+   it is. Then read, in full, `CLAUDE.md`, every file in
    `docs/adr/` (an ADR marked superseded still matters: the superseding
    one says what replaced it), every spec in `specs/` and the README. List
    the conventions these state as one line each, with the file that states
    it; that list is what step 2 checks the code against. Read the previous
    structural report, if any (the most recently closed `source:ceremony`
-   issue whose title names the structural review; `cellq list --state done
-   --source ceremony`), so that a finding it already raised is not raised
-   twice.
+   issue whose title starts `Ceremony: structural`; `cellq list --state
+   done --source ceremony`, then by title; a finding a ceremony opened
+   carries the same label without the `Ceremony: ` prefix and is not one),
+   so that a finding it already raised is not raised twice.
 
 2. **The pass.** Walk the repository top down: the layout, then each
    top-level directory, then the files that other files depend on most.
@@ -85,35 +87,31 @@ GitHub MCP write tool. Reading is free.
    that the ceremony flags it and James decides.
 
 4. **One issue per finding.** For each finding from step 2, write a body
-   with the finding (where, what, which rule, how to check) and a
-   `## Definition of done` section in the form the `scope` skill writes:
-   inputs, outputs, files, sessions, specs, and acceptance statements an
-   agent with no other context can check, the first of which is that the
-   check from the finding no longer fails. Then open it and make it ready
-   through the adapter (the `scope` skill stops on `source:ceremony`, so
-   this ceremony scopes what it opens):
+   with the finding (where, what, which rule, how to check) and what
+   closing it looks like, concretely enough that `scope` can write the
+   definition of done from it without asking: the files the fix touches,
+   and the checks an agent with no other context can run, the first of
+   which is that the check from the finding no longer fails. Then open it
+   through the adapter and leave it in `new`:
    ```bash
    cellq idea "<kind>: <where> — <what>" --body <file> --source ceremony
-   cellq scope <n> --dod <dod-file> --route <small|spec> --priority <p>
    ```
-   The route is `small` unless the fix touches more files than
-   `cellq threshold route.spec_if.files_over` or needs more sessions than
-   `cellq threshold route.spec_if.sessions_over`; then it is `spec`, with
-   `--blocked "awaiting spec PR: specs/<area>.md"`. The priority is what
-   `scope` step 5 gives a `source:ceremony` issue: the default hint times
-   `cellq threshold edges.default`, rounded to the nearest integer, halves
-   up, clamped to the `priority:` range. A finding that calls an ADR into
-   question is still one issue, whose definition of done is a superseding
-   ADR through `/adr` rather than a code change.
+   Set no route, priority or state and write no `## Definition of done`
+   section: that is `scope`'s job, and it treats a `source:ceremony`
+   finding like any other issue (it skips only the ceremony issue itself,
+   the one whose title starts `Ceremony: `). `scope` reaches the issue
+   through the cell-scope workflow, through grooming's routing of what is
+   still new, or by hand (`/scope <n>`). A finding that calls an ADR into
+   question is still one issue, whose body says that closing it is a
+   superseding ADR through `/adr` rather than a code change.
 
-   A finding where you can see the smell but not the fix still gets a
-   definition of done and goes ready: its first acceptance statement is
-   that the question which settles it is answered in the issue body with
-   the evidence (the agent that claims it investigates first), and the
-   rest describe the fix conditional on that answer. Do not park a
-   ceremony-opened issue in `needs-input`: `scope` stops on
-   `source:ceremony`, so nothing in the cell would ever move it on when
-   James answers. A question for James goes in the report instead.
+   A finding where you can see the smell but not the fix is still a task,
+   not a question: say in the body that the first thing closing it means
+   is the question which settles it answered in the issue with the
+   evidence (the agent that claims it investigates first), and describe
+   the fix conditional on that answer. A question only James can answer
+   goes in the report instead, not into the finding's body, so that
+   `scope` is not the one left to ask it.
 
 5. **The sibling-cell candidate.** When step 3 found a second purpose and
    no open issue already names it, open one issue titled exactly
@@ -151,7 +149,7 @@ GitHub MCP write tool. Reading is free.
    | Sibling-cell candidate | yes: <purpose> / no | <n> | <n> |
 
    ### Findings
-   - #<n> <title> — <where>; rule: <file and line, or ADR>; route <r>, priority <p>
+   - #<n> <title> — <where>; rule: <file and line, or ADR>; in new for `scope`
    - (already open as #<m>) <title>
 
    ### Not raised

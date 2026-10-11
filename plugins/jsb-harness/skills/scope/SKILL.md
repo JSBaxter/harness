@@ -26,8 +26,14 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
 ## Steps
 
 1. **Read the issue, then the specs.**
-   - If the issue carries `source:ceremony`, stop and report: ceremony issues
-     are filed ready.
+   - If the issue carries `source:ceremony` and its title starts
+     `Ceremony: `, it is the ceremony issue the cell-ceremony workflow
+     files (`Ceremony: <name> (merged PR <count>)`, straight into ready, for
+     `/ceremony-<name>` to run on): stop and report that. Only that
+     combination is skipped. An issue a ceremony opened for a finding
+     carries `source:ceremony` without that prefix and is scoped like any
+     other; its body says what closing the finding looks like, which is the
+     draft of the definition of done.
    - An issue with no `state:` label is new: it was opened from the web UI or
      with raw `gh` and nothing has labelled it yet. Scope it. If it carries
      a `state:` label other than `new` or `needs-input`, stop and report the
@@ -106,8 +112,7 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
    - `source:cell:<name>`: `cellq threshold edges.<name>`; if that exits 1
      because the key is absent (the failure line names the key, not the
      file), use `cellq threshold edges.default`
-   - `source:agent`: `cellq threshold edges.default` (`source:ceremony`
-     never reaches this step; step 1 stopped on it)
+   - `source:agent` or `source:ceremony`: `cellq threshold edges.default`
 
    Round to the nearest integer, halves up, and clamp to the `priority:`
    range of `1` to `5`.

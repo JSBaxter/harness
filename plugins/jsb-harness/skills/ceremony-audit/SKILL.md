@@ -37,15 +37,18 @@ resumes at step 3 from that agenda.
 
 1. **Open the ceremony issue and gather the inputs.** Read the ceremony
    issue (`gh issue view <n> --json title,labels,state,comments`): it must
-   be open, carry `source:ceremony`, and name the audit; otherwise stop and
+   be open, carry `source:ceremony`, and its title must start `Ceremony:
+   audit` (the form the cell-ceremony workflow files); otherwise stop and
    report what it is. If a comment on it already holds a prepared walk
    (from a non-interactive run), skip to step 3 with that agenda. Then
    gather:
    - **The latest health self-description report**: the most recent
-     comment holding a health report on the most recent issue with
-     `source:ceremony` whose title names the health ceremony (`cellq list
-     --state done --source ceremony` and `cellq list --source ceremony`,
-     then by title and `created_at`; read the comments). It lists the
+     comment holding a health report on the most recent health ceremony
+     issue, the one with `source:ceremony` whose title starts `Ceremony:
+     health` (`cellq list --state done --source ceremony` and `cellq list
+     --source ceremony`, then by title and `created_at`; a finding a
+     ceremony opened carries the same label without that prefix and is not
+     one; read the comments). It lists the
      features the cell offers and whether its requirements are met. When
      no health report exists yet, derive the feature list yourself from
      the Purpose and Behavior sections of every active spec, and say in
@@ -102,33 +105,28 @@ resumes at step 3 from that agenda.
 
 4. **One issue per gap.** For each gap from steps 2 and 3, write a body
    with the question, the answer given, the source consulted, and what
-   closing the gap looks like, with a `## Definition of done` in the form
-   the `scope` skill writes: for an understanding gap, the document that
-   should carry the explanation carries it (a README, CLAUDE.md, spec or
-   ADR edit, as a PR); for a cell gap, the spec statement or behaviour that
-   is missing or wrong, with the test that will assert it. Open it and
-   make it ready through the adapter (the `scope` skill stops on
-   `source:ceremony`, so this ceremony scopes what it opens):
+   closing the gap looks like, concretely enough that `scope` can write
+   the definition of done from it without asking: for an understanding
+   gap, the document that should carry the explanation carries it (a
+   README, CLAUDE.md, spec or ADR edit, as a PR); for a cell gap, the spec
+   statement or behaviour that is missing or wrong, with the test that
+   will assert it. Open it through the adapter and leave it in `new`:
    ```bash
    cellq idea "Audit gap: <short name>" --body <file> --source ceremony
-   cellq scope <n> --dod <dod-file> --route <small|spec> --priority <p>
    ```
-   The route is `small` unless the fix touches more files than
-   `cellq threshold route.spec_if.files_over` or needs more sessions than
-   `cellq threshold route.spec_if.sessions_over`; then it is `spec`, with
-   `--blocked "awaiting spec PR: specs/<area>.md"`. The priority is what
-   `scope` step 5 gives a `source:ceremony` issue: the default hint times
-   `cellq threshold edges.default`, rounded to the nearest integer, halves
-   up, clamped to the `priority:` range. A gap that is a decision James
-   has to make (two readings of the cell, both defensible) is still a
-   ready task, not a parked question: its definition of done is that the
-   decision is recorded, as an ADR through `/adr` or as a settled open
-   question in the spec, in a `proposal` PR James merges, with the two
-   readings and James's answer from the quiz in the body. Never leave a
-   ceremony-opened issue in `needs-input`: `scope` stops on
-   `source:ceremony`, so nothing would move it on. Do not open an issue a previous audit already opened and that is still
-   open (`cellq list --source ceremony`, by title); link to it in the log
-   instead.
+   Set no route, priority or state and write no `## Definition of done`
+   section: that is `scope`'s job, and it treats a `source:ceremony` issue
+   like any other (it skips only the ceremony issue itself, the one whose
+   title starts `Ceremony: `). `scope` reaches the issue through the
+   cell-scope workflow, through grooming's routing of what is still new,
+   or by hand (`/scope <n>`). A gap that is a decision James has to make
+   (two readings of the cell, both defensible) is still a task, not a
+   parked question: say in the body that closing it means the decision is
+   recorded, as an ADR through `/adr` or as a settled open question in
+   the spec, in a `proposal` PR James merges, and put the two readings and
+   James's answer from the quiz in the body. Do not open an issue a
+   previous audit already opened and that is still open (`cellq list
+   --source ceremony`, by title); link to it in the log instead.
 
 5. **The log entry.** Write the entry to the notes repository
    (`JSBaxter/infra-experiment-notes`; locally a sibling checkout at

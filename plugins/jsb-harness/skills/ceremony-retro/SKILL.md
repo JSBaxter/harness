@@ -41,11 +41,14 @@ the PR body or report cites them.
 
 1. **Open the ceremony issue and fix the window.** Read the ceremony issue
    (`gh issue view <n> --json title,labels,state`): it must be open, carry
-   `source:ceremony`, and its title must name the retro; otherwise stop and
-   report what it is. Find the previous retro: the most recently closed
-   issue with `source:ceremony` whose title names the retro (`cellq list
-   --state done --source ceremony`, then by title and `created_at`), and
-   read its close time (`gh issue view <m> --json closedAt`). The window
+   `source:ceremony`, and its title must start `Ceremony: retro` (the form
+   the cell-ceremony workflow files); otherwise stop and report what it
+   is. Find the previous retro: the most recently closed
+   issue with `source:ceremony` whose title starts `Ceremony: retro`
+   (`cellq list --state done --source ceremony`, then by title and
+   `created_at`; a finding a ceremony opened carries the same label
+   without the `Ceremony: ` prefix and is not one), and read its close
+   time (`gh issue view <m> --json closedAt`). The window
    is everything merged after that time; when there is no previous retro,
    the window is the whole repository and the report says so.
 
