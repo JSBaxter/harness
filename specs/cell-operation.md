@@ -253,6 +253,12 @@ Linked issue: #31
 
 ## Decisions
 
+- [[docs/adr/0007-issue-state-in-labels-and-sub-issues.md]] — issue state
+  in labels and sub-issues; the Projects field in the design is amended.
+- [[docs/adr/0008-process-triggers-are-actions-workflows.md]] — scope,
+  converge and ceremony triggers as reusable Actions workflows.
+- [[docs/adr/0009-queue-adapter-is-one-stdlib-script.md]] — `cellq`, one
+  Python stdlib script, REST only.
 - [[docs/adr/0006-pin-callers-to-sha-renovate-bumps.md]] — executable CI
   pinned; skills unpinned. This spec adds skills only.
 - [[docs/adr/0002-no-spec-kit-add-plan-phase.md]] — plan between spec and
