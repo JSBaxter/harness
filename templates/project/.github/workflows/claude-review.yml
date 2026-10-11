@@ -8,9 +8,9 @@
 # reference JSBaxter/* (it would link the accounts in plaintext); it keeps a
 # self-contained copy of the review workflow instead.
 #
-# Pin: `@main` tracks the harness tip (zero-maintenance; a bad harness push can
-# break every repo's gate at once). Swap to a tag (e.g. `@v1`) for controlled
-# rollout.
+# Pin: a full commit SHA with the branch in a trailing comment (harness ADR
+# 0006). Renovate opens a bump PR here when the harness moves; do not edit the
+# SHA by hand.
 name: Claude Review
 
 on:
@@ -36,5 +36,5 @@ permissions:
 
 jobs:
   review:
-    uses: JSBaxter/harness/.github/workflows/claude-review.yml@main
+    uses: JSBaxter/harness/.github/workflows/claude-review.yml@4246fd3854832b3b43bcf1c16c981baca7a6128f # main
     secrets: inherit
