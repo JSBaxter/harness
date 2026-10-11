@@ -8,23 +8,23 @@ validation failure prints one line on stderr and exits 1; a usage or
 environment failure (no repo, no token, unknown verb) exits 2.
 """
 import argparse
+import getpass
 import http.client
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 VERBS = [
     "idea", "scope", "claim", "complete", "state", "depend", "link",
     "request-feature", "ready", "list", "parent", "merged-count", "threshold",
 ]
-STUBS = {
-    "scope", "claim", "complete", "request-feature", "depend",
-    "merged-count", "ready", "list", "parent",
-}
+STUBS = {"ready", "list", "parent"}
 STATES = [
     "new", "needs-input", "ready", "blocked", "in-progress", "in-review",
     "done", "dropped",
@@ -38,6 +38,11 @@ GROUPS = {
     "source": (["own", "ceremony", "agent", re.compile(r"cell:[^\s,]+")], "FBCA04"),
     "priority": (["1", "2", "3", "4", "5"], "B60205"),
 }
+DOD_TITLE = "Definition of done"
+# Body-convention lines (specs/cellq.md): each stands alone, outside any
+# section, so one also ends the section that precedes it.
+CONVENTION_LINE = re.compile(r"(Depends on|Parent):.*")
+DEPENDS_LINE = re.compile(r"Depends on:.*")
 
 
 class Failure(Exception):
@@ -104,7 +109,10 @@ class GitHub:
     def call(self, method, path, body=None):
         """One REST call under /repos/{o}/{r}; returns the parsed JSON body
         (None when empty). Raises Failure on any HTTP or network error."""
-        url = f"{self.base}/repos/{self.repo}{path}"
+        return self.request(method, f"{self.base}/repos/{self.repo}{path}", body)
+
+    def request(self, method, url, body=None):
+        """One REST call to an absolute URL (for endpoints outside /repos)."""
         data = None if body is None else json.dumps(body).encode()
         headers = {
             "Accept": "application/vnd.github+json",
@@ -167,31 +175,48 @@ def set_group_label(gh, number, group, value):
 
 # ----------------------------------------------------------------------- verbs
 
-def cmd_state(gh, a):
-    issue = set_group_label(gh, a.number, "state", a.state)
-    if a.state in ("done", "dropped"):
-        reason = "completed" if a.state == "done" else "not_planned"
-        gh.call("PATCH", f"/issues/{a.number}", {"state": "closed", "state_reason": reason})
+def set_state(gh, number, state, reason=None):
+    """Move the issue to `state`: one state: label, closed for done/dropped
+    (reopened for anything else), and the reason comment when given."""
+    issue = set_group_label(gh, number, "state", state)
+    if state in ("done", "dropped"):
+        state_reason = "completed" if state == "done" else "not_planned"
+        gh.call("PATCH", f"/issues/{number}", {"state": "closed", "state_reason": state_reason})
     elif issue["state"] == "closed":
-        gh.call("PATCH", f"/issues/{a.number}", {"state": "open"})
-    if a.reason:
-        gh.call("POST", f"/issues/{a.number}/comments",
-                {"body": f"state: {a.state} — {a.reason}"})
-    return {"number": a.number, "state": a.state}
+        gh.call("PATCH", f"/issues/{number}", {"state": "open"})
+    if reason:
+        gh.call("POST", f"/issues/{number}/comments", {"body": f"state: {state} — {reason}"})
+    return {"number": number, "state": state}
+
+
+def cmd_state(gh, a):
+    return set_state(gh, a.number, a.state, a.reason)
+
+
+def cmd_complete(gh, a):
+    return set_state(gh, a.number, "done")
+
+
+def read_file(path, what):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Failure(f"cannot read {what} file {path}: {getattr(e, 'strerror', None) or e}")
+
+
+def create_issue(gh, title, body, labels):
+    """Open an issue with its labels in the create request, so they are
+    present on the `opened` event; creates any label missing in the repo."""
+    for name in labels:
+        ensure_label(gh, name)
+    return gh.call("POST", "/issues", {"title": title, "body": body, "labels": labels})
 
 
 def cmd_idea(gh, a):
     labels = [validate_label("state", "new"), validate_label("source", a.source)]
-    body = ""
-    if a.body:
-        try:
-            with open(a.body, encoding="utf-8") as f:
-                body = f.read()
-        except OSError as e:
-            raise Failure(f"cannot read body file {a.body}: {e.strerror}")
-    for name in labels:
-        ensure_label(gh, name)
-    issue = gh.call("POST", "/issues", {"title": a.title, "body": body, "labels": labels})
+    body = read_file(a.body, "body") if a.body else ""
+    issue = create_issue(gh, a.title, body, labels)
     return {"number": issue["number"], "url": issue["html_url"]}
 
 
@@ -215,6 +240,204 @@ def cmd_link(gh, a):
         if body != (child.get("body") or ""):
             gh.call("PATCH", f"/issues/{a.child}", {"body": body})
     return {"parent": a.parent, "child": a.child}
+
+
+# ----------------------------------------------------------- body sections
+
+def find_section(lines, title):
+    """(start, end) of the first heading section titled `title`, at any
+    heading level, end exclusive; None when absent. The section runs to the
+    next heading of the same or a higher level, to a body-convention line,
+    or to the end. Fenced code blocks are skipped, so a `# comment` inside
+    a quoted command is not a heading."""
+    fenced = False
+    start = level = None
+    for i, line in enumerate(lines):
+        if re.match(r"\s*(```|~~~)", line):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        h = re.fullmatch(r"(#{1,6})[ \t]+(.*?)[ \t]*#*[ \t]*", line)
+        if start is None:
+            if h and h.group(2).casefold() == title.casefold():
+                start, level = i, len(h.group(1))
+        elif (h and len(h.group(1)) <= level) or CONVENTION_LINE.fullmatch(line):
+            return start, i
+    return None if start is None else (start, len(lines))
+
+
+def splice(lines, start, end, new):
+    """lines[start:end] replaced by `new`, with one blank line on each side
+    of it where there is neighbouring content."""
+    head, tail = lines[:start], lines[end:]
+    while head and not head[-1].strip():
+        head.pop()
+    while tail and not tail[0].strip():
+        tail.pop(0)
+    return head + ([""] if head else []) + new + ([""] if tail else []) + tail
+
+
+def newline_of(body):
+    return "\r\n" if "\r\n" in body else "\n"
+
+
+def with_dod_section(body, text):
+    """The body with its definition-of-done section replaced by `text`, or
+    `text` appended. `text` is the whole section, heading first; a missing
+    or differently levelled heading is normalised to `## Definition of done`."""
+    new = text.rstrip().splitlines()
+    while new and not new[0].strip():
+        new.pop(0)
+    heading = f"## {DOD_TITLE}"
+    if new and re.fullmatch(r"#{1,6}[ \t]+" + re.escape(DOD_TITLE) + r"[ \t]*#*[ \t]*", new[0], re.I):
+        new[0] = heading
+    else:
+        new = [heading, ""] + new
+    lines = body.splitlines()
+    span = find_section(lines, DOD_TITLE)
+    if span is None:
+        # Append, but ahead of any convention lines that end the body, so
+        # `Depends on:` written before scoping still follows the section.
+        at = len(lines)
+        while at and (not lines[at - 1].strip() or CONVENTION_LINE.fullmatch(lines[at - 1])):
+            at -= 1
+        span = (at, at)
+    return newline_of(body).join(splice(lines, *span, new)) + newline_of(body)
+
+
+def depends_on(body):
+    """The issue numbers on the `Depends on:` line, in order."""
+    for line in body.splitlines():
+        if DEPENDS_LINE.fullmatch(line):
+            return [int(n) for n in re.findall(r"#(\d+)", line)]
+    return []
+
+
+def with_depends_line(body, numbers):
+    """The body with its `Depends on:` line rewritten, or created after the
+    definition-of-done section (else at the end) when absent."""
+    line = "Depends on: " + ", ".join(f"#{n}" for n in numbers)
+    lines = body.splitlines()
+    for i, old in enumerate(lines):
+        if DEPENDS_LINE.fullmatch(old):
+            lines[i] = line
+            break
+    else:
+        span = find_section(lines, DOD_TITLE)
+        at = span[1] if span else len(lines)
+        lines = splice(lines, at, at, [line])
+    return newline_of(body).join(lines) + newline_of(body)
+
+
+# ------------------------------------------------------------ lifecycle verbs
+
+def cmd_scope(gh, a):
+    validate_label("route", a.route)
+    validate_label("priority", str(a.priority))
+    if a.blocked is not None and not a.blocked.strip():
+        raise Failure("--blocked needs a reason")
+    dod = read_file(a.dod, "--dod")
+    if not dod.strip():
+        raise Failure(f"--dod file {a.dod} is empty")
+    issue = gh.call("GET", f"/issues/{a.number}")
+    body = with_dod_section(issue.get("body") or "", dod)
+    if body != (issue.get("body") or ""):
+        gh.call("PATCH", f"/issues/{a.number}", {"body": body})
+    set_group_label(gh, a.number, "route", a.route)
+    set_group_label(gh, a.number, "priority", str(a.priority))
+    if a.blocked is not None:
+        state = set_state(gh, a.number, "blocked", a.blocked)["state"]
+    else:
+        state = set_state(gh, a.number, "ready")["state"]
+    return {"number": a.number, "route": a.route, "priority": a.priority, "state": state}
+
+
+def session_ref(explicit):
+    for value in (explicit, os.environ.get("CLAUDE_SESSION_ID"), os.environ.get("GITHUB_RUN_ID")):
+        if value:
+            return value
+    try:
+        user = getpass.getuser()
+    except (OSError, KeyError, ImportError):
+        user = "unknown"
+    return f"{user}@{socket.gethostname()}"
+
+
+def cmd_claim(gh, a):
+    issue = gh.call("GET", f"/issues/{a.number}")
+    states = [l["name"][len("state:"):] for l in issue["labels"] if l["name"].startswith("state:")]
+    if states != ["ready"]:
+        raise Failure(f"issue #{a.number} is not state:ready (state: {', '.join(states) or 'none'})")
+    ref = session_ref(a.session)
+    set_state(gh, a.number, "in-progress")
+    at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    gh.call("POST", f"/issues/{a.number}/comments", {"body": f"claimed by {ref} at {at}"})
+    return {"number": a.number, "claimed_by": ref, "claimed_at": at}
+
+
+def cmd_depend(gh, a):
+    if a.number == a.target:
+        raise Failure(f"issue #{a.number} cannot depend on itself")
+    issue = gh.call("GET", f"/issues/{a.number}")
+    gh.call("GET", f"/issues/{a.target}")  # a dependency must exist here
+    body = issue.get("body") or ""
+    numbers = depends_on(body)
+    if a.target not in numbers:
+        numbers.append(a.target)
+    new = with_depends_line(body, numbers)
+    if new != body:
+        gh.call("PATCH", f"/issues/{a.number}", {"body": new})
+    return {"number": a.number, "depends_on": numbers}
+
+
+def cmd_request_feature(gh, a):
+    if not re.fullmatch(r"[^/\s]+/[^/\s]+", a.to):
+        raise Failure(f"--to must be owner/repo, got: {a.to}")
+    if not a.kind.strip():
+        raise Failure("--kind needs a value")
+    hint = "_No response_"
+    if a.priority_hint is not None:
+        validate_label("priority", str(a.priority_hint))
+        hint = str(a.priority_hint)
+    example, why = read_file(a.example, "--example"), read_file(a.why, "--why")
+    cell = gh.repo.split("/", 1)[1]
+    remote_gh = GitHub(a.to, gh.token)
+    remote_labels = [validate_label("state", "new"), validate_label("source", f"cell:{cell}")]
+    # The six headings of request.yml, as the form renders them. The
+    # requesting issue is the mirror, which does not exist yet: the field
+    # names the cell now and is completed once the mirror is open.
+    def remote_body(requester):
+        sections = [
+            ("Requesting cell and issue", requester),
+            ("What is needed", f"Kind: {a.kind.strip()}\n\n{a.title}"),
+            ("Example", example.strip()),
+            ("Why", why.strip()),
+            ("Priority hint", hint),
+            (DOD_TITLE, ""),
+        ]
+        return "".join(f"### {h}\n\n{t}\n\n" for h, t in sections)
+    remote = create_issue(remote_gh, a.title, remote_body(gh.repo), remote_labels)
+    mirror_body = (
+        f"Request to {a.to}: {remote['html_url']}\n\n"
+        f"Blocked until {a.to}#{remote['number']} is done.\n\n"
+        f"Kind: {a.kind.strip()}\n\n### Example\n\n{example.strip()}\n\n### Why\n\n{why.strip()}\n"
+    )
+    mirror_labels = [validate_label("state", "blocked"), validate_label("source", "own")]
+    mirror = create_issue(gh, f"Request to {a.to}: {a.title}", mirror_body, mirror_labels)
+    remote_gh.call("PATCH", f"/issues/{remote['number']}",
+                   {"body": remote_body(f"{gh.repo}#{mirror['number']}")})
+    remote_gh.call("POST", f"/issues/{remote['number']}/comments",
+                   {"body": f"Requested by {gh.repo}#{mirror['number']}: {mirror['html_url']}"})
+    return {"remote": {"number": remote["number"], "url": remote["html_url"]},
+            "mirror": {"number": mirror["number"], "url": mirror["html_url"]}}
+
+
+def cmd_merged_count(gh, _a):
+    # The search endpoint's total_count, never a listing (cell-operation.md
+    # risk table): one call however many PRs have merged.
+    data = gh.request("GET", f"{gh.base}/search/issues?q=repo:{gh.repo}+is:pr+is:merged")
+    return {"count": data["total_count"]}
 
 
 # ------------------------------------------------------------------ thresholds
@@ -327,6 +550,40 @@ def build_parser():
     s.add_argument("--body", metavar="file")
     s.add_argument("--source", default="own")
     s.set_defaults(fn=cmd_idea)
+
+    s = sub.add_parser("scope", parents=[common])
+    s.add_argument("number", type=int)
+    s.add_argument("--dod", metavar="file", required=True)
+    s.add_argument("--route", required=True)
+    s.add_argument("--priority", type=int, required=True)
+    s.add_argument("--blocked", metavar="reason")
+    s.set_defaults(fn=cmd_scope)
+
+    s = sub.add_parser("claim", parents=[common])
+    s.add_argument("number", type=int)
+    s.add_argument("--session", metavar="ref")
+    s.set_defaults(fn=cmd_claim)
+
+    s = sub.add_parser("complete", parents=[common])
+    s.add_argument("number", type=int)
+    s.set_defaults(fn=cmd_complete)
+
+    s = sub.add_parser("depend", parents=[common])
+    s.add_argument("number", type=int)
+    s.add_argument("target", type=int, metavar="m")
+    s.set_defaults(fn=cmd_depend)
+
+    s = sub.add_parser("request-feature", parents=[common])
+    s.add_argument("title")
+    s.add_argument("--to", metavar="o/r", required=True)
+    s.add_argument("--kind", required=True)
+    s.add_argument("--example", metavar="file", required=True)
+    s.add_argument("--why", metavar="file", required=True)
+    s.add_argument("--priority-hint", type=int, metavar="p")
+    s.set_defaults(fn=cmd_request_feature)
+
+    s = sub.add_parser("merged-count", parents=[common])
+    s.set_defaults(fn=cmd_merged_count)
 
     s = sub.add_parser("link", parents=[common])
     s.add_argument("parent", type=int)
