@@ -28,8 +28,10 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
 1. **Read the issue, then the specs.**
    - If the issue carries `source:ceremony`, stop and report: ceremony issues
      are filed ready.
-   - If the issue is in neither `state:new` nor `state:needs-input`, stop and
-     report the state: it has been scoped already, or someone is working it.
+   - An issue with no `state:` label is new: it was opened from the web UI or
+     with raw `gh` and nothing has labelled it yet. Scope it. If it carries
+     a `state:` label other than `new` or `needs-input`, stop and report the
+     state: it has been scoped already, or someone is working it.
    - If it is in `state:needs-input`, this is a re-run: James has commented.
      Treat every comment by the repository owner that follows the question
      comment (`state: needs-input — ...?`) as part of the issue body from
@@ -53,6 +55,10 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
      definition of done says how this cell proves it, in the vocabulary of
      this cell's specs.
    - `Why` links the requester's spec; read it for context, not for wording.
+   - The heading says how the issue was written, not where it came from: a
+     request a cell's agent filed with `cellq request-feature` carries
+     `source:cell:<name>`; one a person typed into the form carries no
+     `source:` label. Step 5 weights by the label, not the heading.
 
 3. **Write the definition of done, or ask one question.** The form is in
    "Definition of done" below: concrete inputs, observable outputs, and
@@ -83,19 +89,25 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
    cellq threshold route.spec_if.files_over
    cellq threshold route.spec_if.sessions_over
    ```
-   Above either value the route is `spec`; otherwise `small`. If
-   `cellq threshold` fails (exit 1 naming `thresholds.yml`), stop and report
-   that the cell has no thresholds file; do not substitute a value from
-   memory or from another repository. Record the file list and the session
-   estimate in the definition of done so the route is checkable.
+   Above either value the route is `spec`; otherwise `small`. If either
+   read fails, stop and report what the failure line says: exit 1 naming
+   `thresholds.yml` means the cell has no thresholds file; exit 2 means no
+   repository or token; command not found means the plugin is not installed
+   (in a cloud session run it as `../harness/plugins/jsb-harness/bin/cellq`).
+   Never substitute a value from memory or from another repository. Record
+   the file list and the session estimate in the definition of done so the
+   route is checkable.
 
 5. **Priority.** Take the hint from the `Priority hint` field when the body
-   has one with a value, else `3`. Multiply by the edge weight for the
-   issue's `source:` label:
+   has one with a value (the form renders an unset hint as `_No response_`,
+   which is no value), else `3`. Multiply by the edge weight for the issue's
+   `source:` label:
    - `source:own`, or no `source:` label: `cellq threshold edges.self`
    - `source:cell:<name>`: `cellq threshold edges.<name>`; if that exits 1
-     with `threshold key not found`, use `cellq threshold edges.default`
-   - `source:ceremony`, `source:agent`: `cellq threshold edges.default`
+     because the key is absent (the failure line names the key, not the
+     file), use `cellq threshold edges.default`
+   - `source:agent`: `cellq threshold edges.default` (`source:ceremony`
+     never reaches this step; step 1 stopped on it)
 
    Round to the nearest integer, halves up, and clamp to the `priority:`
    range of `1` to `5`.
@@ -160,4 +172,4 @@ input `<quoted input>`, expected output `<quoted output>`. Requested by
 
 A statement is testable when it names what to run or look at and what must
 be there. "The parser handles bad input" is not; "`cellq threshold
-no.such.key` exits 1 and prints `threshold key not found` on stderr" is.
+no.such.key` exits 1 and names `no.such.key` on stderr" is.
