@@ -2,14 +2,15 @@
 # workflow JSBaxter/harness/.github/workflows/claude-fix.yml, so fixes in the
 # harness reach this repo with no edit here — this stub only wires the comment
 # triggers, the per-PR concurrency group, the token scopes, and secrets.
-# See harness docs/adr/0001-ci-via-reusable-workflow.md and 0003 decision 3.
+# See harness docs/adr/0001-ci-via-reusable-workflow.md and 0006.
 #
 # IMPORTANT — primary-identity repos ONLY. A stealth-identity repo must NOT
 # reference JSBaxter/* (it would link the accounts in plaintext); it keeps a
 # self-contained copy instead.
 #
-# Pin: `@main` tracks the harness tip. Swap to a tag (e.g. `@v1`) for
-# controlled rollout — see ADR 0003 decision 2.
+# Pin: a full commit SHA with the branch in a trailing comment (harness ADR
+# 0006). Renovate opens a bump PR here when the harness moves; do not edit the
+# SHA by hand.
 name: Claude Fix
 
 on:
@@ -59,5 +60,5 @@ permissions:
 
 jobs:
   fix:
-    uses: JSBaxter/harness/.github/workflows/claude-fix.yml@main
+    uses: JSBaxter/harness/.github/workflows/claude-fix.yml@4246fd3854832b3b43bcf1c16c981baca7a6128f # main
     secrets: inherit

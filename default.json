@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset for JSBaxter cells. Projects extend it with \"github>JSBaxter/harness\" (ADR 0006).",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "packageRules": [
+    {
+      "description": "Reusable harness workflows are pinned to a commit SHA with the branch in a comment; track the branch head as a digest.",
+      "matchDepTypes": ["workflow"],
+      "matchPackageNames": ["JSBaxter/harness"],
+      "pinDigests": true,
+      "automerge": false
+    }
+  ],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 2
+}

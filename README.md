@@ -97,6 +97,10 @@ else. Every environment resolves the same source:
   token needs occasional refreshing (claude-code-action issue #727).
 - **Routines**: created at claude.ai/code/routines; prompt templates in
   `routines/`.
+- **Renovate**: install the Renovate GitHub App on the account and enable it
+  for each repo. Project stubs pin the harness workflows to a commit SHA; the
+  shared preset `default.json` here (extended by each repo's `renovate.json`)
+  opens the bump PRs. ADR 0006.
 - **Observability** (optional): self-hosted SigNoz or Langfuse; point Claude
   Code's OpenTelemetry env vars at it in `settings.local.json`.
 
