@@ -15,6 +15,10 @@
 #   on: schedule (weekly by default) and workflow_dispatch
 #   permissions: contents: write, pull-requests: write
 #   secrets: inherit
+# and the cell's repository setting "Allow GitHub Actions to create and
+# approve pull requests" (Settings > Actions > General) must be on, or
+# create-pull-request fails with GITHUB_TOKEN: "GitHub Actions is not
+# permitted to create or approve pull requests".
 #
 # Design notes (don't simplify these away):
 # - One branch per cell, `template-sync`, force-updated by every run; the PR
