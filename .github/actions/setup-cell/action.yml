@@ -1,0 +1,87 @@
+# Deliver the cell's skills and the `cellq` queue adapter onto an Actions
+# runner, so a session started by a cell workflow (cell-scope.yml,
+# cell-converge.yml) can run `/scope` or `/converge` and call `cellq`.
+#
+# Why this exists: there is no plugin install in Actions. The jsb-harness
+# plugin is installed on laptops, and a cloud session reads skills a project
+# repo commits under .claude/skills/ (docs/cloud-capabilities.md), but a
+# claude-code-action run on a runner has neither, so the skills the workflow
+# prompt names (`Run /<skill> on issue #<n>`, ADR 0008)
+# would not resolve and `cellq` would not be on PATH. This composite action is
+# the sibling of setup-reviewer: the harness checkout that GitHub makes for
+# any `uses: JSBaxter/harness/...` reference already contains the plugin, so
+# we copy from `$GITHUB_ACTION_PATH/../../../plugins/jsb-harness` at run time.
+# One source serves every repo; project repos carry no copy (ADR 0005, 0006).
+#
+# Delivery point: $HOME/.claude/skills, not the workspace. A workspace-
+# relative `.claude/agents/` did not register under claude-code-action
+# (setup-reviewer's comment has the symptom), while the user-level directory
+# is read regardless of the session's cwd; this action starts from that
+# lesson. What the session's cwd actually is remains unverified until the
+# first issue-triggered run; `cellq threshold` depends on it (it resolves
+# thresholds.yml from the git toplevel of the cwd).
+#
+# Contract: only each skill's SKILL.md is delivered. No skill ships a sibling
+# file today; one that does must extend the copy below, or it will pass the
+# delivery check here and fail inside the session.
+name: setup-cell
+description: >-
+  Deliver every jsb-harness skill into $HOME/.claude/skills/<name>/SKILL.md and
+  the cellq queue adapter onto PATH, from the harness checkout that this
+  action's own reference brings. Fails loudly if a source is missing, and lists
+  what it delivered in the log and the step summary.
+
+runs:
+  using: composite
+  steps:
+    - id: deliver
+      shell: bash
+      run: |
+        set -euo pipefail
+        plugin="$GITHUB_ACTION_PATH/../../../plugins/jsb-harness"
+        skills_src="$plugin/skills"
+        cellq_src="$plugin/bin/cellq"
+        skills_dst="$HOME/.claude/skills"
+        bin_dst="$HOME/.local/bin"
+
+        # Fail before touching anything: a half-delivered cell is worse than
+        # none, because the session would start and then stop on a missing
+        # skill or command ten minutes in.
+        if [ ! -d "$skills_src" ]; then
+          echo "::error::harness skills not found at $skills_src"
+          exit 1
+        fi
+        if [ ! -f "$cellq_src" ]; then
+          echo "::error::cellq not found at $cellq_src"
+          exit 1
+        fi
+
+        mkdir -p "$skills_dst" "$bin_dst"
+
+        delivered=()
+        # SKILL.md only; see the contract note in the header.
+        for src in "$skills_src"/*/SKILL.md; do
+          [ -f "$src" ] || continue
+          name=$(basename "$(dirname "$src")")
+          mkdir -p "$skills_dst/$name"
+          cp "$src" "$skills_dst/$name/SKILL.md"
+          delivered+=("$name")
+        done
+        if [ "${#delivered[@]}" -eq 0 ]; then
+          echo "::error::no skills found under $skills_src (expected */SKILL.md)"
+          exit 1
+        fi
+
+        install -m 0755 "$cellq_src" "$bin_dst/cellq"
+        echo "$bin_dst" >> "$GITHUB_PATH"
+
+        # Prove delivery, not intent: list what is on disk now.
+        skills_line=$(printf '%s ' "${delivered[@]}")
+        echo "Skills delivered to $skills_dst: $skills_line"
+        echo "cellq delivered to $bin_dst/cellq (added to PATH)"
+        {
+          echo "### setup-cell"
+          echo ""
+          echo "- Skills (\`$skills_dst\`): $skills_line"
+          echo "- \`cellq\` -> \`$bin_dst/cellq\` (on PATH for later steps)"
+        } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,107 @@
+# Cell scope trigger: when an issue opens, start a fresh session that runs the
+# `scope` skill on it; when James answers a needs-input question, run it again.
+#
+# This is the REUSABLE core (on: workflow_call). Project repos do NOT copy it;
+# each carries a pinned caller stub (templates/project/.github/workflows/
+# cell-scope.yml, added by T13) that `uses:` this file with `secrets: inherit`,
+# so logic changes here reach every cell through a bump PR (ADR 0001, 0006,
+# 0008).
+#
+# What the caller stub must provide (a called workflow is capped at the
+# caller's token scopes, so it fails to start without these):
+#   on: issues: [opened]; issue_comment: [created]
+#   permissions: contents: read, issues: write, id-token: write
+#   secrets: inherit
+#   concurrency: group cell-scope-${{ github.event.issue.number }} with
+#     cancel-in-progress: false (unlike the review stub), so two quick owner
+#     comments on one needs-input issue queue rather than run together, and
+#     a cancel never kills a session between cellq's label write and its
+#     comment write.
+#
+# Design notes:
+# - The prompt names the skill and nothing else: `Run /scope on issue #<n>`.
+#   The skill is the procedure (plugins/jsb-harness/skills/scope/SKILL.md);
+#   this workflow only decides when to start it (ADR 0008). Do not grow the
+#   prompt into instructions; change the skill.
+# - Skills and `cellq` reach the runner through the setup-cell composite
+#   action, since no plugin install exists in Actions. $HOME/.claude is the
+#   delivery point that claude-code-action actually reads.
+# - A run that fails leaves the issue in its prior state (no `state:` label,
+#   `state:new`, or `state:needs-input`). Nothing here retries or marks it;
+#   the grooming ceremony routes any issue still unscoped. So failure is
+#   safe, not silent.
+# - The github context (event_name, event.issue.*, event.comment.*) is the
+#   caller's, so the job guard below works unchanged via workflow_call.
+# - `source:ceremony` issues are filed ready by cell-ceremony.yml and the
+#   skill would stop on them anyway; skipping here saves the session.
+# - `issue_comment` fires for PR comments too (a PR is an issue to that
+#   event), hence the `!github.event.issue.pull_request` guard.
+# - The re-run guard also excludes the adapter's own question. `cellq state
+#   <n> needs-input --reason` sets the label and then posts
+#   `state: needs-input — <question>?` (specs/cellq.md); when `/scope` runs
+#   on a laptop that comment is authored with James's token, so without the
+#   `startsWith` clause the question itself would start a session that only
+#   asks it again. Issues filed from inside Actions fire nothing anyway.
+name: Cell Scope (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  scope:
+    if: >-
+      !github.event.issue.pull_request
+      && !contains(github.event.issue.labels.*.name, 'source:ceremony')
+      && (
+           (github.event_name == 'issues' && github.event.action == 'opened')
+           || (
+                github.event_name == 'issue_comment'
+                && github.event.action == 'created'
+                && github.event.comment.user.login == github.repository_owner
+                && contains(github.event.issue.labels.*.name, 'state:needs-input')
+                && !startsWith(github.event.comment.body, 'state: needs-input')
+              )
+         )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # Skills and cellq are delivered from the harness at run time; the
+      # calling repo carries neither (ADR 0005 pattern, see the action).
+      # Known exposure: ADR 0006 decision 3 accepted this `@main` second hop
+      # for setup-reviewer because it carried prose only. setup-cell extends
+      # it to `cellq`, an executable that writes issue state, so a bad harness
+      # merge reaches every cell's next scope run without a bump PR. Accepted
+      # for now because ADR 0009 already ships cellq unpinned to laptops and
+      # cloud sessions through the plugin copy, so Actions adds no new
+      # surface; revisit (pin to a SHA with Renovate tracking it) if a cellq
+      # regression ever reaches a cell this way.
+      - name: Deliver skills and cellq
+        uses: JSBaxter/harness/.github/actions/setup-cell@main
+
+      - name: Scope the issue
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # An issue opened by our own agent through the Claude GitHub App
+          # (a cloud or web session filing a request) arrives with actor
+          # claude[bot] and must still be scoped; the action refuses non-human
+          # actors unless named here. Named, not "*": allowed bots skip the
+          # permission check. (Issues filed with GITHUB_TOKEN from inside
+          # Actions, e.g. `cellq idea` in a workflow, never fire this
+          # workflow at all; grooming routes those.)
+          allowed_bots: "claude"
+          show_full_output: true
+          # Bash unrestricted for the same reason as the review gate: the skill
+          # calls `cellq` and `gh`, and an allowlist wall is invisible from
+          # the issue side. `cellq` is the only writer of issue state.
+          claude_args: '--max-turns 40 --allowedTools "Read,Glob,Grep,Edit,Write,Bash"'
+          # Quoted: a bare ` #` would start a YAML comment.
+          prompt: "Run /scope on issue #${{ github.event.issue.number }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
