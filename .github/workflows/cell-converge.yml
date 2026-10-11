@@ -1,0 +1,173 @@
+# Cell converge trigger: when an issue closes, look up its parent and, once
+# every sub-issue of that parent is closed, start a fresh session that runs
+# the `converge` skill on the parent.
+#
+# This is the REUSABLE core (on: workflow_call). Project repos do NOT copy it;
+# each carries a pinned caller stub (rendered by stem-cell from
+# template/.github/workflows/cell-converge.yml.jinja) that `uses:` this file
+# with `secrets: inherit`, so logic changes here reach every cell through a
+# bump PR (ADR 0001, 0006, 0008).
+#
+# What the caller stub must provide (a called workflow is capped at the
+# caller's token scopes, so it fails to start without these):
+#   on: issues: [closed]
+#   permissions: contents: read, issues: write, id-token: write
+#   secrets: inherit
+#   concurrency: group cell-converge-${{ github.event.issue.number }} with
+#     cancel-in-progress: false, so a cancel never kills a session between
+#     cellq's label write and its comment write.
+#   The stub's group is per closed issue, so it does not keep two closes of
+#   sibling tasks apart; the job below adds a repository-wide group for that
+#   (see the design note on siblings).
+#
+# What does NOT start this: a sub-issue closed with GITHUB_TOKEN from inside
+# another workflow. GitHub never chains events created with the Actions
+# token, so an issue that `cellq complete` closes from cell-ceremony.yml
+# fires no `issues: closed` event here, and that parent sits unconverged
+# until someone notices. The grooming ceremony covers that gap: its step 8
+# finds every `route:spec` parent whose sub-issues are all closed with no
+# fold PR and no gap issue, and runs `/converge` on it in its own session
+# (plugins/jsb-harness/skills/ceremony-grooming/SKILL.md; the plan's risk
+# table). An issue James closes by hand, or that a PR merge closes through
+# `Closes #n`, does fire this.
+#
+# Design notes:
+# - The prompt names the skill and nothing else: `Run /converge on issue
+#   #<parent>`. The skill is the procedure (plugins/jsb-harness/skills/
+#   converge/SKILL.md); this workflow only decides when to start it (ADR
+#   0008). Do not grow the prompt into instructions; change the skill.
+# - `cellq parent <n>` answers about n itself: n's parent, and n's own
+#   sub-issues with their all_closed (specs/cellq.md). So the closed issue
+#   gives the parent, and a second call on the parent gives whether every
+#   sub-issue is closed. `all_closed` is vacuously true for an issue with
+#   no sub-issues, which is why the second call also requires a non-empty
+#   list before it says yes.
+# - The gate repeats what the skill checks first (its step 1 stops on an
+#   open sub-issue or an empty list), so the session is only spent when it
+#   will act. The skill, not this file, decides about an already-open fold
+#   PR, a closed parent and the rest.
+# - Siblings. One merged PR whose body closes the parent's last two tasks,
+#   or James closing two in the UI inside a minute, fires two `issues:
+#   closed` events, and both Find parent steps would see every sub-issue
+#   closed. The job's concurrency group (one converge at a time per
+#   repository, never cancelled) runs them one after the other, and the
+#   second then finds what the first did: on the fold path the skill has
+#   set the parent `state:in-review` and its step 1 stops on the open fold
+#   PR; on the gap path the skill has linked the gap issue as a sub-issue
+#   of the parent, so the second run's lookup sees an open sub-issue and
+#   skips without a session. GitHub keeps at most one pending run per
+#   group and cancels the older pending one when a third arrives; three
+#   closes of one parent inside a run are fine (any one converges it), and
+#   a dropped run for a different parent is what grooming step 8 catches.
+# - A run that fails leaves the parent in its prior state; nothing here
+#   retries or marks it. Grooming step 8 routes it on the next period, so
+#   failure is safe, not silent.
+# - The github context (event_name, event.issue.*) is the caller's, so the
+#   job guard below works unchanged via workflow_call. `issues` does not
+#   fire for pull requests, but the guard keeps the `!pull_request` clause
+#   as cell-scope does: the cost is nothing and a future `issue_comment`
+#   trigger would need it.
+# - Skills and `cellq` reach the runner through the setup-cell composite
+#   action, as in cell-scope.
+# - Tokens. The skill's success path pushes a fold branch and opens a
+#   proposal PR, which the caller's scopes (contents: read, no
+#   pull-requests) would not allow with the workflow token. It works
+#   because claude-code-action exchanges the OIDC token (id-token: write)
+#   for a Claude GitHub App installation token and sets GH_TOKEN and
+#   GITHUB_TOKEN to it in the process that spawns the session
+#   (src/entrypoints/run.ts), and in agent mode git-config.ts drops the
+#   checkout's auth header and sets the origin URL with that token. So
+#   inside the session `git push`, `gh pr create`
+#   and `cellq` all run on the App token, with the App's own scopes; the
+#   step's `GH_TOKEN: github.token` below reaches only the action's other
+#   composite steps, as in cell-scope. Two consequences: the fold PR and
+#   any gap issue are authored by claude[bot], and, unlike writes made
+#   with the workflow token, they fire events (the review gate skips the
+#   PR on its `proposal` label; cell-scope allows the bot for that reason).
+#   Unverified until the first real run: an `issues: closed` event runs
+#   only the caller stub on the cell's default branch, so a probe needs a
+#   stub there, pointing at the harness ref under test; the test-drive
+#   check for this file ran the Find parent step from a branch and did
+#   not touch that cell's default branch.
+name: Cell Converge (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  converge:
+    if: >-
+      github.event_name == 'issues'
+      && github.event.action == 'closed'
+      && !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One converge at a time per repository, queued, never cancelled; see
+    # the siblings note in the header. A constant group is per repository
+    # already, since concurrency groups are scoped to the repository.
+    concurrency:
+      group: cell-converge
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # Same `@main` second hop as cell-scope, with the same accepted
+      # exposure (see the comment there and ADR 0006 decision 3); #66 pins
+      # it at job.workflow_sha for every reusable workflow at once.
+      - name: Deliver skills and cellq
+        uses: JSBaxter/harness/.github/actions/setup-cell@main
+
+      # Outputs: `parent` is the parent issue number, or the word `null`
+      # when the closed issue has none; `all_closed` is `true` only when
+      # the parent has sub-issues and every one of them is closed.
+      - name: Find parent
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          closed=$(cellq parent "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY")
+          echo "cellq parent $ISSUE_NUMBER: $closed"
+          parent=$(python3 -c 'import json,sys; p = json.load(sys.stdin)["parent"]; print("null" if p is None else p)' <<<"$closed")
+          all_closed=false
+          if [ "$parent" != "null" ]; then
+            tree=$(cellq parent "$parent" --repo "$GITHUB_REPOSITORY")
+            echo "cellq parent $parent: $tree"
+            all_closed=$(python3 -c 'import json,sys; t = json.load(sys.stdin); print("true" if t["sub_issues"] and t["all_closed"] else "false")' <<<"$tree")
+          fi
+          echo "parent=$parent" >> "$GITHUB_OUTPUT"
+          echo "all_closed=$all_closed" >> "$GITHUB_OUTPUT"
+          if [ "$parent" = "null" ]; then
+            echo "Issue #$ISSUE_NUMBER has no parent; nothing to converge."
+          elif [ "$all_closed" != "true" ]; then
+            echo "Parent #$parent still has open sub-issues; not converging yet."
+          else
+            echo "Every sub-issue of #$parent is closed; starting converge."
+          fi
+
+      - name: Converge the parent
+        if: steps.find.outputs.parent != 'null' && steps.find.outputs.all_closed == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The actor is whoever closed the issue. When that is our own agent
+          # through the Claude GitHub App (a cloud session completing a task),
+          # it arrives as claude[bot] and must still converge; the action
+          # refuses non-human actors unless named here. Named, not "*":
+          # allowed bots skip the permission check.
+          allowed_bots: "claude"
+          show_full_output: true
+          # Bash unrestricted for the same reason as cell-scope: the skill runs
+          # the tests, calls `cellq` and `gh`, and an allowlist wall is
+          # invisible from the issue side. `cellq` is the only writer of
+          # issue state.
+          claude_args: '--max-turns 60 --allowedTools "Read,Glob,Grep,Edit,Write,Bash"'
+          # Quoted: a bare ` #` would start a YAML comment.
+          prompt: "Run /converge on issue #${{ steps.find.outputs.parent }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

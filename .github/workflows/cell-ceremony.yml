@@ -1,0 +1,203 @@
+# Cell ceremony trigger: when a pull request closes by merging, mark every
+# issue the PR closed `state:done` through cellq, count the cell's merged
+# PRs, and file a ceremony issue for each ceremony whose period in
+# thresholds.yml divides that count. No Claude session starts here; the
+# session comes later, when someone runs `/ceremony-<name>` on the issue.
+#
+# This is the REUSABLE core (on: workflow_call). Project repos do NOT copy it;
+# each carries a pinned caller stub (rendered by stem-cell from
+# template/.github/workflows/cell-ceremony.yml.jinja) that `uses:` this file
+# with `secrets: inherit`, so logic changes here reach every cell through a
+# bump PR (ADR 0001, 0006, 0008).
+#
+# What the caller stub must provide (a called workflow is capped at the
+# caller's token scopes, so it fails to start without these):
+#   on: pull_request: [closed]
+#   permissions: contents: read, issues: write, pull-requests: read
+#   secrets: inherit
+#   pull-requests: read is needed because a PR's merge state is
+#   pull-request data: without the scope the search qualifier `is:merged`
+#   that `cellq merged-count` relies on matches nothing under GITHUB_TOKEN
+#   (probed on harness-test-drive: with contents: read + issues: write
+#   alone, `is:pr` found every PR and `is:merged` found zero), so no
+#   ceremony would ever be due. A stub that grants less makes the call
+#   fail to start, which is visible in the Actions tab; nothing of this
+#   job runs then, the done states of part (a) included.
+#   A PR from a fork, or one Dependabot authored, runs with a read-only
+#   token whatever the stub grants; cells are single-owner repositories
+#   with Renovate on same-repository branches, so that run fails red
+#   rather than being designed around.
+#
+# Design notes:
+# - `Closes #n` closes the issue on merge but leaves its `state:` label
+#   behind (the plan's "Done state"). Part (a) below is what makes `done`
+#   true in the queue: `cellq complete` for every issue the body closes.
+#   Only the `#n` form counts, which is what `/ship` writes. `owner/repo#n`
+#   may close an issue elsewhere, which this cell's adapter must not touch;
+#   the full-URL and `GH-n` forms GitHub also honours are not read, so an
+#   issue closed that way keeps a stale `state:` label until grooming
+#   routes it. GitHub closes by keyword only on a merge into the default
+#   branch, so part (a) runs only for those; a `#n` that names a pull
+#   request is skipped, since `cellq complete` would close it.
+# - The period of each ceremony is read from the cell's thresholds.yml with
+#   `cellq threshold ceremonies.<name>.every_merges`; nothing here is tuned.
+#   A missing file or key fails the step, so the gap shows red in the
+#   Actions tab instead of ceremonies silently never being filed.
+# - The ceremony issue is filed straight into `state:ready` with
+#   `source:ceremony` and a body of one line naming the skill to run. No
+#   `## Definition of done` section, deliberately: the ceremony skills tell
+#   their own issue apart from a task by exactly that absence (grooming
+#   step 4), and each checks the title names its ceremony. Scope will not
+#   run on it: an issue created with GITHUB_TOKEN fires no `issues: opened`
+#   event, and cell-scope skips `source:ceremony` regardless.
+# - A re-run of a job while its ceremony issue is still open files nothing
+#   twice: an open `source:ceremony` issue with the same title means this
+#   count's ceremony is already on the queue. Once that issue is closed a
+#   re-run would file it again; re-running a finished ceremony run is a
+#   hand action, so that is left to the hand.
+# - Two merges close together run twice, each with its own count, which is
+#   what the period rule wants. The count comes from the search endpoint's
+#   total_count (specs/cellq.md), which can lag a merge by a few seconds;
+#   a run that reads the count before the index catches up sees the
+#   previous one, and a ceremony that falls on the skipped count waits for
+#   its next period. Known; measure on the first cell before adding a wait.
+#   A count of zero (a new cell's first merge read before the index has it)
+#   is due for nothing, since every period divides zero. Two runs that
+#   read the same lagging count and both pass the open-title check before
+#   either files would file a ceremony twice; the stub carries no
+#   concurrency group, and that needs a period hit, two merges seconds
+#   apart and the lag together, so it is noted rather than guarded.
+# - A missing thresholds.yml fails the step only after part (a), so the
+#   done states are written whatever the state of the ceremonies.
+# - The github context (event_name, event.pull_request.*) is the caller's,
+#   so the job guard below works unchanged via workflow_call. The caller's
+#   `pull_request: [closed]` also fires for a close without a merge, which
+#   the guard skips in seconds.
+# - The PR body is untrusted text: it reaches the shell only through an
+#   environment variable, never by expression inside the script.
+# - `cellq` reaches the runner through the setup-cell composite action, as
+#   in cell-scope, with the same accepted `@main` second hop (#66 pins it).
+name: Cell Ceremony (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  ceremony:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      # The checkout is for thresholds.yml: `cellq threshold` resolves it
+      # from the git toplevel of the working directory.
+      - uses: actions/checkout@v6
+
+      - name: Deliver skills and cellq
+        uses: JSBaxter/harness/.github/actions/setup-cell@main
+
+      - name: Complete closed issues and file due ceremonies
+        id: ceremony
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          summary=$(mktemp)
+          # Whatever exits this script, the summary so far reaches the run.
+          trap 'cat "$summary" >> "$GITHUB_STEP_SUMMARY"' EXIT
+          {
+            echo "### cell-ceremony: merged PR #$PR_NUMBER"
+            echo ""
+          } >> "$summary"
+
+          # (a) Every issue the merged PR closes becomes state:done. The
+          # keywords are GitHub's closing keywords, any case, an optional
+          # colon, then a same-repository #n. Each number once. GitHub only
+          # closes by keyword on a merge into the default branch.
+          closed=""
+          if [ "$PR_BASE" = "$DEFAULT_BRANCH" ]; then
+            closed=$(grep -oiE '\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved):?[[:space:]]+#[[:digit:]]+' <<<"$PR_BODY" \
+              | grep -oE '[[:digit:]]+$' | sort -un || true)
+          else
+            echo "PR #$PR_NUMBER merged into $PR_BASE, not $DEFAULT_BRANCH: GitHub closes nothing by keyword, so neither does this."
+            echo "- Merged into $PR_BASE, not the default branch: no done states written." >> "$summary"
+          fi
+          if [ -z "$closed" ] && [ "$PR_BASE" = "$DEFAULT_BRANCH" ]; then
+            echo "PR #$PR_NUMBER closes no issue by keyword."
+            echo "- Closes no issue by keyword." >> "$summary"
+          fi
+          for n in $closed; do
+            # A number that names a pull request is not an issue to complete.
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY/issues/$n" --jq 'has("pull_request")')" = "true" ]; then
+              echo "#$n is a pull request; not an issue to complete."
+              echo "- #$n is a pull request; skipped" >> "$summary"
+              continue
+            fi
+            # Tolerated: an issue already done (completed by hand, or by an
+            # earlier PR that closed it too) is not a failure of this merge.
+            if out=$(cellq complete "$n"); then
+              echo "cellq complete $n: $out"
+              echo "- #$n -> state:done" >> "$summary"
+            else
+              echo "::warning::cellq complete $n failed (already done, or not an issue of this repository); see the step log"
+              echo "- #$n: cellq complete failed (see the log)" >> "$summary"
+            fi
+          done
+
+          # The ceremonies need thresholds.yml; checked after (a) so that a
+          # cell without the file still gets its done states written.
+          if [ ! -f thresholds.yml ]; then
+            echo "::error::thresholds.yml is missing from the repository root; ceremony periods cannot be read (templates/project/thresholds.yml in the harness is the starter)"
+            exit 1
+          fi
+
+          # (b) The cell's merged-PR count, from the search endpoint.
+          count=$(cellq merged-count | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])')
+          echo "Merged PRs in $GITHUB_REPOSITORY: $count"
+          echo "- Merged-PR count: $count" >> "$summary"
+          if (( count == 0 )); then
+            echo "::warning::merged-count is zero right after a merge: the search index has not caught up; no ceremony is due at zero"
+            echo "- Count is zero (search index lag); no ceremony filed" >> "$summary"
+            exit 0
+          fi
+
+          # (c) File each ceremony whose period divides the count. The
+          # ceremony names are the five skills, ceremony-<name>; each
+          # period is a key of thresholds.yml, read through the adapter.
+          existing=$(cellq list --source ceremony)
+          body=$(mktemp)
+          for name in grooming health retro structural audit; do
+            period=$(cellq threshold "ceremonies.$name.every_merges")
+            if ! [[ "$period" =~ ^[[:digit:]]+$ ]] || (( period == 0 )); then
+              echo "::error::ceremonies.$name.every_merges in thresholds.yml is '$period'; it must be a positive integer"
+              exit 1
+            fi
+            if (( count % period != 0 )); then
+              echo "$name: every $period merges; not due at $count."
+              continue
+            fi
+            title="Ceremony: $name (merged PR $count)"
+            if python3 -c 'import json,sys; sys.exit(0 if any(i["title"] == sys.argv[1] for i in json.load(sys.stdin)) else 1)' "$title" <<<"$existing"; then
+              echo "$name: '$title' is already open; not filing it twice."
+              echo "- $name: already open, not refiled" >> "$summary"
+              continue
+            fi
+            printf 'Run /ceremony-%s on this issue. Merged-PR count: %s.\n' "$name" "$count" > "$body"
+            created=$(cellq idea "$title" --source ceremony --body "$body")
+            echo "cellq idea: $created"
+            n=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["number"])' <<<"$created")
+            cellq state "$n" ready
+            url=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["url"])' <<<"$created")
+            echo "$name: filed #$n ready ($url)."
+            echo "- $name: filed #$n ready, $url" >> "$summary"
+          done
