@@ -60,5 +60,5 @@ permissions:
 
 jobs:
   fix:
-    uses: JSBaxter/harness/.github/workflows/claude-fix.yml@4246fd3854832b3b43bcf1c16c981baca7a6128f # main
+    uses: JSBaxter/harness/.github/workflows/claude-fix.yml@c74494104aed927d905a9ab150e4a4860f91a6b7 # main
     secrets: inherit

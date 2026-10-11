@@ -68,6 +68,10 @@
 - `docs/adr/` — decision history (MADR-style, supersede-don't-delete)
 - `.github/workflows/claude-review.yml` — thin caller of the harness reusable
   review workflow; the agent review gate on every PR (proposals skip it)
+- `.github/workflows/cell-scope.yml`, `cell-converge.yml`, `cell-ceremony.yml`,
+  `template-sync.yml` — thin callers of the harness reusable cell workflows
+  (scope on issue open, converge on last sub-issue close, ceremony on PR
+  merge, weekly template sync), each pinned to one harness commit (ADR 0006)
 - `thresholds.yml` — every number a rule reads, via `cellq threshold`; only
   the workflow retro changes it, as a PR James merges
 - `.github/ISSUE_TEMPLATE/request.yml` — the cross-cell request form: six
