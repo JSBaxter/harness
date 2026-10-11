@@ -315,7 +315,19 @@ else
   cq scope "$w" --dod "$tmp/dod.md" --route small --priority 2 >/dev/null
   w2=$(cq idea "cellq test ready own later" | jq -r .number); created+=("$w2")
   cq scope "$w2" --dod "$tmp/dod.md" --route small --priority 2 >/dev/null
-  out=$(ready)
+  # GitHub's issue listing can trail a burst of writes by a few seconds, so
+  # wait for the fixtures to show before judging their order; the adapter
+  # itself never retries (every call reads GitHub once, per the contract)
+  settled() {   # ready's output once it lists every issue number given, or after the last try
+    local out n all
+    for _ in $(seq 15); do
+      out=$(ready); all=yes
+      for n in "$@"; do has "$out" "$n" || all=no; done
+      [ "$all" = yes ] && break; sleep 2
+    done
+    printf '%s' "$out"
+  }
+  out=$(settled "$w" "$w2" "$o")
   # own at priority 2 outranks cell:other at priority 3 weighted 0.5; equal scores go to the older issue
   [ "$(jq -c '[.[0:3][].number]' <<<"$out")" = "[$w,$w2,$o]" ] && ok || bad "ready order: $(jq -c '[.[] | [.number, .score]]' <<<"$out")"
   jq -e '.[0] | .priority == 2 and .source == "own" and .weight == 1 and .score == 2' <<<"$out" >/dev/null && ok || bad "ready own row: $(jq -c '.[0]' <<<"$out")"
@@ -333,7 +345,7 @@ else
   out=$(ready)                                                             # a crash here aborts the run, not a silent pass
   has "$out" "$A" && bad "ready lists #$A while #$B is open" || ok
   cq complete "$B" >/dev/null
-  out=$(ready)
+  out=$(settled "$A")
   has "$out" "$A" && ok || bad "ready lacks #$A after #$B closed"
   [ "$(jq -r '.[0].number' <<<"$out")" = "$A" ] && ok || bad "ready: #$A at priority 5 should rank first"
 fi
