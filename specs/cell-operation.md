@@ -202,15 +202,17 @@ rendered from the project template.
   spec.
 - `split-spec` on a delta lacking non-goals: stops before the splitter
   runs and names the missing field; no issues are created.
-- `converge` when every criterion passes and every What-changes claim no
-  criterion covers has a test: one open PR, labelled `proposal`, whose
+- `converge` when every criterion passes and every claim no criterion
+  covers (in What changes, or in a new spec's Behavior) has a test: one
+  open PR, labelled `proposal`, whose
   diff removes the delta from Pending changes and adds its behaviour
   content to Behavior, each statement naming a test; any documentation,
   process or convention content is in Constraints, Non-goals, the README
   or an ADR with no test line; no gap issue.
-- `converge` when every criterion passes but a What-changes claim no
-  criterion covers has no test: one open gap issue naming the claim and
-  the missing test; the delta unchanged; no PR.
+- `converge` when every criterion passes but a claim no criterion covers
+  (in What changes, or in a new spec's Behavior) has no test: one open
+  gap issue naming the claim and the missing test; the delta unchanged;
+  no PR.
 - `converge` when one criterion fails: one open gap issue naming the
   criterion and its evidence; the delta unchanged; no PR.
 - `converge` on a behaviour criterion whose only evidence is a command's

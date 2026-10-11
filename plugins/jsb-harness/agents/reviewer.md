@@ -37,8 +37,9 @@ Review against, in priority order:
    (b) A Behavior statement the diff changes or adds, or whose described
        behaviour the diff changes, names no test, or names a test that does
        not assert it. A statement names its test as `— test: <name>`, where
-       the name is a test the runner re-runs: a test function or case, or
-       a screenshot comparison for UI appearance. A command or a file and
+       the name is a test the runner re-runs: a test function or case
+       (for UI appearance, the test that runs the screenshot comparison).
+       A command or a file and
        line after `— test:` is not a test, so a statement carrying one
        names no test. Open the named test and check it
        exercises the statement, since a matching name is not evidence, and

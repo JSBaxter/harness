@@ -69,12 +69,13 @@ API is fine.
    ```
    A test that does not yet exist is not a test name; write it first. Nor
    is a command or a file and line: the name is a test the runner re-runs
-   (a test function or case, or a screenshot comparison for UI
-   appearance). A statement that is documentation, process
+   (a test function or case; for UI appearance, the test that runs the
+   screenshot comparison). A statement that is documentation, process
    or convention (what a document says, a step a person takes by hand,
    how a thing is named or laid out) is not a Behavior statement: put it
-   in the spec's Constraints or Non-goals, with no test line, where it
-   produces no `## Spec changes` line. For
+   in the spec's Constraints or Non-goals, with no test line. A new one
+   there produces no `## Spec changes` line; one moved out of Behavior
+   is a removal from Behavior and is listed with `— test: removed`. For
    each statement, keep a line in the form `/ship`'s `## Spec changes`
    section wants, ready to hand over in step 6:
    ```markdown

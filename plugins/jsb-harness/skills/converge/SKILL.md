@@ -145,7 +145,10 @@ absent).
      check, not a reason to fail it. One that needs a live issue is
      exercised against a scratch repository kept for that purpose, never
      against the cell's own queue, where an issue filed with `cellq idea`
-     enters intake. A criterion you cannot exercise is one whose check
+     enters intake. For a behaviour criterion the thing exercised is its
+     test: the fixture or scratch repository is what that test needs, and
+     a command run beside it only accompanies the test's result on the
+     line. A criterion you cannot exercise is one whose check
      needs a credential, network or surface this session has no way to
      obtain, or a command that does not exist; it is a `FAIL` whose
      evidence begins `environmental:` and says exactly what could not be
@@ -154,7 +157,8 @@ absent).
    - A behaviour criterion (something runs, returns, exits, refuses,
      writes, shows) passes only on the result of a real, re-runnable test:
      a test function or case the cell's test runner runs, or, for UI
-     appearance, a screenshot comparison. A command's output or a file and
+     appearance, the test that runs a screenshot comparison. A command's
+     output or a file and
      line is evidence of a check, not a test: it may follow the test's
      result on a `PASS` line and it belongs on a `FAIL` line, but it never
      makes a `PASS` on its own. Find the test by its name, or by grepping
@@ -202,8 +206,9 @@ absent).
        - <the statement> — test: <test name>
        ```
        The thing after `test:` is a test name and nothing else: a test
-       function or case the runner re-runs, or a screenshot comparison
-       for UI appearance; never a command and never a file and line.
+       function or case the runner re-runs (for UI appearance, the test
+       that runs the screenshot comparison); never a command and never a
+       file and line.
        Behaviour content that no criterion covers has its test from its
        own evidence line in step 2 (a fold happens only when every line
        passed, so each has one): name it the same way. A statement
@@ -215,10 +220,11 @@ absent).
        something the cell will not do into `## Non-goals`; what a reader
        of the repository needs into the README; a decision worth
        remembering into an ADR under `docs/adr/`, in the `adr` skill's
-       form, filed `accepted` because a merged `proposal` PR is the
-       acceptance (that skill's step 5 exception), and linked from the
-       spec's `## Decisions`; take nothing else from that skill. The PR
-       body lists each
+       form, with its numbering and supersession steps and nothing else
+       from it (no CLAUDE.md edit); its status is `accepted` in the PR
+       itself, because a merged `proposal` PR is the acceptance (that
+       skill's step 5 exception), and it is linked from the spec's
+       `## Decisions`. The PR body lists each
        such item and where it went under `## Outside Behavior`.
    - For a new spec, Behavior is already written: add the `— test:` ending
      to each statement a criterion covers, and to each behaviour
@@ -304,6 +310,8 @@ absent).
    reads as a request for a test, not for a code change; for an uncovered
    claim, also that editing the delta to drop or move the claim closes
    it.
+   A claim too long for a title is cut at the first clause, the same way
+   on every run, and the body carries it whole.
    Before filing, look for an earlier gap with the same title: `gh issue
    list --state all --search "<words> in:title" --json
    number,title,state,labels`, where `<words>` are the criterion's words

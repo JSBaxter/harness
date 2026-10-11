@@ -63,8 +63,9 @@ those lines into the report.
    laid out) is not one: record it as `MOVE` (step 3), run nothing for
    it, and leave it out of every count. A statement names its test when
    it ends `— test: <name>` (the `spec` skill's form) and the name is a
-   test: a test function or case the runner re-runs, or a screenshot
-   comparison for UI appearance, as `converge` step 3 writes them. A
+   test: a test function or case the runner re-runs (for UI appearance,
+   the test that runs the screenshot comparison), as `converge` step 3
+   writes them. A
    command or a file and line after `— test:` is not a test name:
    treat such a statement as unnamed in step 2, so its test is searched
    for and, when found, named by step 5.
@@ -82,8 +83,8 @@ those lines into the report.
 2. **Find and run each statement's test.** For every statement:
    - **Named test.** Find the test by its name: a test function or case by
      grep across the test directory CLAUDE.md's test command points at
-     (`grep -rn '<name>' tests/`, or the directory the command names), or
-     a screenshot comparison by the test that runs it. Run the named
+     (`grep -rn '<name>' tests/`, or the directory the command names).
+     Run the named
      test on its own through the cell's test runner (`pytest -k <name>`,
      `python3 -m unittest <module>.<Class>.<name>`, `bash <script>` for a
      shell test, as the test command indicates), and keep the runner's
@@ -230,9 +231,11 @@ those lines into the report.
      rule the cell holds to), its `## Non-goals` (something the cell will
      not do), the README (what a reader of the repository needs), or a new
      ADR under `docs/adr/` in the `adr` skill's form (a decision worth
-     remembering), filed `accepted` because a merged `proposal` PR is the
-     acceptance (that skill's step 5 exception) and linked from the
-     spec's `## Decisions`; take nothing else from that skill. No issue;
+     remembering), with its numbering and supersession steps and nothing
+     else from it (no CLAUDE.md edit); its status is `accepted` in the PR
+     itself, because a merged `proposal` PR is the acceptance (that
+     skill's step 5 exception), and it is linked from the spec's
+     `## Decisions`. No issue;
      the report lists it as moved, with
      the PR as its action, or `in progress: #<parent>` for a draft spec
      being built (step 3), for which nothing is proposed.
