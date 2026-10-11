@@ -91,6 +91,10 @@ The gate's self-skip rule now keys on `reviewer-override.md` rather than
   push changes review behaviour in every repo immediately — the same argument
   ADR 0003 decision 2 makes for the workflow. Cutting `v1` and retargeting both
   the workflow stub and this action is now more pressing than it was.
+
+  > **Note (2026-10-11):** no longer true. The stub pins a commit SHA (ADR
+  > 0006) and the workflow runs this action from a checkout of the harness
+  > at its own commit (ADR 0010), so the action is pinned to the same SHA.
 - **Existing repos** (`chord-recommender`, `harness-test-drive`) carry a
   now-dead `reviewer.md`: still in git, ignored at review time. Both are
   byte-identical to the old template — neither had customised it — so they are

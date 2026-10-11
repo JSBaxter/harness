@@ -59,9 +59,9 @@ the fixture-cell CI) stands.
    (`setup-reviewer`) and `cell-scope.yml` (`setup-cell`); the converge and
    ceremony workflows follow the same shape when they land.
 2. **`.harness/` is removed as soon as the action has run**, and always
-   before any step that could commit or push (the fixer in the review gate,
-   `create-pull-request` in a sync), so the checkout can never reach a
-   project's branch.
+   before any step that could commit or push (today the fixer in the review
+   gate; a sync workflow's `create-pull-request`, should one ever use a
+   harness action), so the checkout can never reach a project's branch.
 3. **The harness repository is public.** The Actions access-level setting
    on this repository (`actions/permissions/access`, set to `user`), which
    the `new-experiment` skill had every new machine apply so that a private
