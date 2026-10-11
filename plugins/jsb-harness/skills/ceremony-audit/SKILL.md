@@ -202,13 +202,13 @@ The full walk runs on the ceremony's period. The short form runs on one
 capability, the one a fold PR just moved out of Pending changes (behaviour
 into Behavior, each statement naming its test; documentation, process and
 convention into Constraints, Non-goals, the README or an ADR), and it lives
-on that fold PR: `converge` step 6 opens the thread
-there, so the audit is attached to the thing James is about to merge and
-there is no separate issue. The same three levels, in the same order, but
-only about that capability: what it offers and whether its criteria are
-met (the converge evidence lines are the source); the approach the
-delta took and why; the decisions it made, with the ADR or plan line that
-made them. Few questions, one at a time, as comments on the fold PR; James
+on that fold PR: `converge` step 6 opens the thread there, so the audit is
+attached to the thing James is about to merge and there is no separate
+issue. The same three levels, in the same order, but only about that
+capability: what it offers and whether its criteria are met (the converge
+evidence lines are the source); the approach the delta took and why; the
+decisions it made, with the ADR or plan line that made them. Few questions,
+one at a time, as comments on the fold PR; James
 answers in the thread; the agent confirms or corrects in a reply. Each gap
 is an issue through the adapter exactly as step 4, with the fold PR linked
 in its body. No log entry is written for the short form; the thread on the

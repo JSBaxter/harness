@@ -15,7 +15,7 @@ Create or update a living specification under `specs/`.
   derived by /split-spec live alongside with a `Derived from:` line.
 - A spec change for existing behavior is written as a **delta**: what changes,
   what stays, what's removed — folded into the spec body by `/converge` once
-  the implementing work merges (step 4), never by hand.
+  the implementing work merges (step 4 below), never by hand.
 - Acceptance criteria are written to be executable by an agent with no other
   context: concrete inputs, observable outputs, testable statements.
 
@@ -96,7 +96,8 @@ residual-stream-viz first iteration).
    (`<area>.plan.md` files there are implementation plans, not specs — they
    describe how in-flight work is being built and get retired when it lands.)
 2. If the user described a change to existing behavior, write it under
-   **Pending changes** as a delta; don't rewrite the body until the change lands.
+   **Pending changes** as a delta; the body is not rewritten by hand, before
+   or after the change lands (step 4).
    A delta carries all eight headed fields, each starting its own line with
    the field name and a colon: **What changes**, **What stays**, **What is
    removed**, **Acceptance criteria**, **Non-goals**, **Constraints**, **Open
@@ -120,5 +121,6 @@ residual-stream-viz first iteration).
    naming its test; documentation, process and convention go to Constraints,
    Non-goals, the README or an ADR. A failing criterion opens a gap issue
    instead and the delta stays in Pending changes. A `route:small` issue
-   has no delta: its PR edits the Behavior statement it alters directly, in
-   the same branch, naming the test, per `/implement` step 4.
+   has no delta: its PR edits Behavior directly, in the same branch, each
+   statement it changes, adds or removes naming the test, per `/implement`
+   step 4.
