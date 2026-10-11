@@ -33,10 +33,10 @@ through it too, never with raw `gh issue edit`.
    CLAUDE.md).
 4. **Self-review** — invoke the **reviewer** agent (fresh context) on the diff.
    Fix Important findings, rerun tests, re-review until the reviewer approves
-   or the round count reaches `cellq threshold review.max_rounds` with no
-   progress — in the no-progress case, note the disputed findings in the PR
-   body for the human. Give the reviewer the draft PR body (step 9), because
-   its spec-behaviour check reads the `## Spec changes` section.
+   or `cellq threshold review.max_rounds` rounds have run, whichever comes
+   first — if the bound is hit, note the outstanding and disputed findings in
+   the PR body for the human. Give the reviewer the draft PR body (step 9),
+   because its spec-behaviour check reads the `## Spec changes` section.
 5. **ADR check** — did this work establish a new convention or make a real
    choice? If yes, run /adr before opening the PR.
 6. **Commit hygiene** — commits should be small and each message follows
@@ -154,9 +154,11 @@ through it too, never with raw `gh issue edit`.
    ## Spec changes
    <spec file>: "<statement>" — test: <test name>
    ```
-   The reviewer and James check this heading against the diff: `none` with
-   a spec file in the diff, or a listed statement the diff does not touch,
-   is an Important finding. If `gh pr edit` hits the projectCards GraphQL
+   The reviewer and James check this heading against the diff: `none` when
+   the diff changes a statement under a spec's `## Behavior`, or a listed
+   statement the diff does not touch, is an Important finding. Spec edits
+   outside `## Behavior` (an open question settled, a non-goal added) are
+   `none` here. If `gh pr edit` hits the projectCards GraphQL
    deprecation error, PATCH the body via
    `gh api -X PATCH repos/<owner>/<repo>/pulls/<n>`.
 10. **Move the issue to in-review** as soon as the PR exists:

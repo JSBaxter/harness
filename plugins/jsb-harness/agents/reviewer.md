@@ -38,12 +38,16 @@ Review against, in priority order:
        since a matching name is not evidence, and a deleted or inverted
        test counts as none.
    (c) The PR body's `## Spec changes` section disagrees with the diff: it
-       says `none` while a `specs/*.md` file changed; it lists a statement the
-       diff does not change; or the section is missing. A `none` that agrees
-       with the diff is still wrong when (a) fails; report that under (a).
-       Read the body with
+       says `none` while the diff changes a statement in the `## Behavior`
+       section of a `specs/*.md` file; it lists a statement the diff does not
+       change; or the section is missing. Spec edits outside `## Behavior`
+       (open questions, non-goals, decisions) do not make `none` wrong. A
+       `none` that agrees with the diff is still wrong when (a) fails; report
+       that under (a). Read the body with
        `gh pr view <n> --json body --jq .body`, or without `gh`,
-       `GET /repos/{owner}/{repo}/pulls/{n}` and its `body` field. Before a PR
+       `GET /repos/{owner}/{repo}/pulls/{n}` and its `body` field. If you were
+       not given `<n>`, find it with `gh pr list --head <branch> --json number`
+       or, in Actions, from `GITHUB_REF` (`refs/pull/<n>/merge`). Before a PR
        exists (a /ship round), use the draft body you were given; if you were
        given none, say so as a Minor finding and do the other two checks.
 
