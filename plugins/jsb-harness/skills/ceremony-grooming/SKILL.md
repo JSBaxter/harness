@@ -50,16 +50,21 @@ step 9 turns those lines into the report.
    cellq list --state in-progress
    ```
    Each row carries `claimed_at` (from the adapter's `claimed by <ref> at
-   <time>` comment). A claim is stale when now minus `claimed_at` exceeds
-   the limit *and* the branch shows no activity since the claim: no open PR
-   that references the issue (`gh pr list --state open --search "#<n>"`),
-   and no commit on any branch newer than `claimed_at` whose message or
-   branch name names the issue as a whole number, not as a substring of a
-   longer one (`git fetch --all --prune`, then `git log --all
-   --since=<claimed_at> --grep='#<n>\b'`, and for each remote branch whose
+   <time>` comment). R8 is "in progress past the limit with no branch
+   activity", so the age that counts is measured from the *latest* sign of
+   work on the issue, not from the claim alone: the latest of `claimed_at`,
+   the last update of an open PR that references the issue (`gh pr list
+   --state open --search "#<n>" --json updatedAt`), and the newest commit
+   on any branch whose message or branch name names the issue as a whole
+   number, not as a substring of a longer one (`git fetch --all --prune`,
+   then `git log --all --since=<claimed_at> --format=%cI
+   --grep='#<n>\([^[:digit:]]\|$\)'`, and for each remote branch whose
    name has `<n>` as a whole segment between `-`, `_` or `/`, the date of
-   `git show -s --format=%cI <branch>`). Activity means a session is still working it, even slowly:
-   leave it alone and list it in the report as "old claim, active".
+   `git show -s --format=%cI <branch>`). The claim is stale when now minus
+   that latest time exceeds the limit. A commit made just after the claim
+   does not keep a dead session's claim alive: only activity inside the
+   window does. A claim past the limit whose latest activity is inside the
+   window is listed in the report as "old claim, active" and left alone.
    Otherwise release it:
    ```bash
    cellq state <n> ready --reason "stale claim: R8"
@@ -74,14 +79,19 @@ step 9 turns those lines into the report.
    judgement. There are two parts:
    - **James said drop.** For every open issue (`cellq list` across every
      open state; `in-progress` and `in-review` included), read its comments.
-     A comment by the repository owner whose whole body is the word `drop`
-     is an instruction, whenever it was posted: the issue is still open, so
-     it has not been acted on yet.
+     When the repository owner's most recent comment on the issue has the
+     word `drop` as its whole body, and the issue has not been reopened
+     since that comment (no `reopened` event newer than it in `gh api
+     repos/<o>/<r>/issues/<n>/events`), it is an instruction. A later
+     owner comment saying anything else, or a reopen, retracts it.
      ```bash
      cellq state <n> dropped --reason "drop: James's comment of <date>"
      ```
    - **Candidates for James.** For every other open issue in `new`,
-     `needs-input`, `ready` or `blocked`, take its last activity as
+     `needs-input`, `ready` or `blocked`, except ceremony issues
+     (`source:ceremony` with no `## Definition of done`) and `route:spec`
+     parents (their activity is in their sub-issues), take its last
+     activity as
      `updatedAt` (`gh issue view <n> --json updatedAt`; a label, body or
      comment change all move it). An issue whose last activity is older
      than the last grooming has gone a whole period untouched: list it in
@@ -96,11 +106,15 @@ step 9 turns those lines into the report.
 
 4. **Rescore by the edge table.** Edge weights change when the retro's
    threshold PR merges, so a priority set at scoping can be out of date.
-   For each issue in `cellq list --state ready` that does not carry
-   `source:ceremony` (ceremony issues are filed ready with no definition of
-   done and no route, and are never rescored or sent back; the audit's may
-   wait in ready for James), recompute the priority exactly as `scope`
-   step 5 does: the hint from the body's `Priority hint`
+   For each issue in `cellq list --state ready`, first tell the ceremony
+   issues apart from the rest: an issue carrying `source:ceremony` with no
+   `## Definition of done` section is a ceremony issue the workflow filed
+   ready (the audit's may wait there for James); skip it, it is never
+   rescored or sent back. A ceremony-opened task (`source:ceremony` with a
+   definition of done and a route) is rescored like any other, since a
+   retro change to `edges.default` is exactly what should reach it. For
+   each remaining issue, recompute the priority exactly as `scope` step 5
+   does: the hint from the body's `Priority hint`
    field when it has a value, else the default `scope` uses when there is
    none; times the weight for the issue's `source:` label:
    - `source:own`, or none: `cellq threshold edges.self`
@@ -117,9 +131,9 @@ step 9 turns those lines into the report.
    ```bash
    cellq scope <n> --dod <file> --route <its route label> --priority <p>
    ```
-   The issue stays ready. An issue in ready with no definition of done or
-   no route label is malformed: do not rescore it; send it back so step 7
-   routes it properly:
+   The issue stays ready. Any other issue in ready with no definition of
+   done or no route label is malformed: do not rescore it; send it back so
+   step 7 routes it properly:
    ```bash
    cellq state <n> new --reason "grooming: ready without a definition of done or route"
    ```
@@ -176,9 +190,9 @@ step 9 turns those lines into the report.
    `/scope` on it (the skill in
    `plugins/jsb-harness/skills/scope/SKILL.md`; from source in a cloud
    session) and record the state it set. An issue in new that carries
-   `source:ceremony` was opened by a ceremony that did not scope it, or was
-   sent back by step 4; write its definition of done from its body as that
-   ceremony would have and record it with `cellq scope` as step 6 does.
+   `source:ceremony` was opened by a ceremony that did not finish scoping
+   it; write its definition of done from its body as that ceremony would
+   have and record it with `cellq scope` as step 6 does.
    When `/scope` ends in `needs-input`, that is a result, not a failure:
    the report lists the question.
 
@@ -192,12 +206,17 @@ step 9 turns those lines into the report.
    ```
    The output names the parent, its sub-issues and `all_closed`. If the
    adapter takes a child rather than a parent (the output's `parent` is not
-   `<n>` and `sub_issues` is empty), call it again with one of the parent's
-   sub-issues, read from `GET repos/<o>/<r>/issues/<n>/sub_issues` (reading
-   is free). When `all_closed` is true and `sub_issues` is not empty, look for its
-   fold PR: a PR, open or merged, labelled `proposal`, whose body closes or
-   names the parent (`gh pr list --state all --label proposal --search
-   "#<n>"`). When there is none, run `/converge` on the parent (the skill in
+   `<n>` with `sub_issues` empty, or it exits 1 saying the issue has no
+   parent), call it again with one of the parent's sub-issues, read from
+   `GET repos/<o>/<r>/issues/<n>/sub_issues` (reading is free). When
+   `all_closed` is true and `sub_issues` is not empty, the parent has been
+   converged already if either exists: a fold PR, open or merged but not
+   closed unmerged, labelled `proposal`, whose body closes or names the
+   parent (`gh pr list --state open --label proposal --search "#<n>"`, then
+   the same with `--state merged`); or an open gap issue from a previous
+   converge, one that links to the parent and names a failed criterion
+   (`gh issue list --state open --search "#<n>"`, read the bodies). When
+   neither exists, run `/converge` on the parent (the skill in
    `plugins/jsb-harness/skills/converge/SKILL.md`) in this session, one
    parent at a time, and record what it produced: a fold PR URL or a gap
    issue URL. When the converge skill is not installed and cannot be read

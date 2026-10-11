@@ -55,7 +55,10 @@ resumes at step 3 from that agenda.
      questions sections of every spec.
    - **The previous audit**: the most recent entry for this cell under
      `design/audit-log/` in the notes repository, so that a gap it logged
-     can be checked for closure.
+     can be checked for closure; and the short-form threads since it, the
+     comments on every fold PR merged after that entry's date (`gh pr
+     list --state merged --label proposal --json number,mergedAt,url`,
+     then `gh pr view <n> --json comments`), for the gaps they raised.
 
 2. **Prepare the walk.** Write the agenda as three ordered levels, each a
    list of questions with the answer you expect and the source the answer
@@ -117,12 +120,13 @@ resumes at step 3 from that agenda.
    `scope` step 5 gives a `source:ceremony` issue: the default hint times
    `cellq threshold edges.default`, rounded to the nearest integer, halves
    up, clamped to the `priority:` range. A gap that is a decision James
-   has to make (two readings of the cell, both defensible) goes to him
-   instead of ready, with the one question:
-   ```bash
-   cellq state <n> needs-input --reason "<question>?"
-   ```
-   Do not open an issue a previous audit already opened and that is still
+   has to make (two readings of the cell, both defensible) is still a
+   ready task, not a parked question: its definition of done is that the
+   decision is recorded, as an ADR through `/adr` or as a settled open
+   question in the spec, in a `proposal` PR James merges, with the two
+   readings and James's answer from the quiz in the body. Never leave a
+   ceremony-opened issue in `needs-input`: `scope` stops on
+   `source:ceremony`, so nothing would move it on. Do not open an issue a previous audit already opened and that is still
    open (`cellq list --source ceremony`, by title); link to it in the log
    instead.
 

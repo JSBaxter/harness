@@ -72,7 +72,8 @@ GitHub MCP write tool. Reading is free.
    output only for structure (an import cycle, a skipped test, a warning
    about a deprecated path); their green or red is not this ceremony's
    finding. Ignore style a linter would catch, and ignore anything an open
-   issue already covers (`cellq list`, by title and body).
+   issue already covers (`cellq list` for the titles; `gh issue view <n>
+   --json body` for the bodies of the likely ones).
 
 3. **A second purpose?** Ask of the whole repository: does it do one
    thing? Signs of a second purpose: a directory with its own
@@ -105,12 +106,14 @@ GitHub MCP write tool. Reading is free.
    question is still one issue, whose definition of done is a superseding
    ADR through `/adr` rather than a code change.
 
-   A finding too uncertain to carry a definition of done (you can see the
-   smell but not the fix) is still an issue, sent to James instead of
-   ready, with the one question that would settle it:
-   ```bash
-   cellq state <n> needs-input --reason "<question>?"
-   ```
+   A finding where you can see the smell but not the fix still gets a
+   definition of done and goes ready: its first acceptance statement is
+   that the question which settles it is answered in the issue body with
+   the evidence (the agent that claims it investigates first), and the
+   rest describe the fix conditional on that answer. Do not park a
+   ceremony-opened issue in `needs-input`: `scope` stops on
+   `source:ceremony`, so nothing in the cell would ever move it on when
+   James answers. A question for James goes in the report instead.
 
 5. **The sibling-cell candidate.** When step 3 found a second purpose and
    no open issue already names it, open one issue titled exactly
@@ -118,7 +121,11 @@ GitHub MCP write tool. Reading is free.
    step 3, which specs and directories would move, and what the dependency
    between the two cells would become as a cross-cell request. It carries
    no definition of done: splitting is James's decision, not an agent's
-   task.
+   task, and the issue is his decision record. It is the one issue this
+   ceremony leaves in `needs-input`, on purpose: nothing in the cell moves
+   it on; James closes it as not planned, or births the sibling (the
+   project-creation path) and closes it when the moved capability's spec
+   is marked superseded here.
    ```bash
    cellq idea "Sibling-cell candidate: <purpose>" --body <file> --source ceremony
    cellq state <n> needs-input --reason "Split <purpose> into a sibling cell?"
