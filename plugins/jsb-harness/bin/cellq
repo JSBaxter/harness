@@ -199,7 +199,7 @@ def cmd_complete(gh, a):
 
 def read_file(path, what):
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(path, encoding="utf-8-sig") as f:  # -sig: an editor's BOM is not text
             return f.read()
     except (OSError, UnicodeDecodeError) as e:
         raise Failure(f"cannot read {what} file {path}: {getattr(e, 'strerror', None) or e}")
@@ -285,8 +285,10 @@ def newline_of(body):
 def with_dod_section(body, text):
     """The body with its definition-of-done section replaced by `text`, or
     `text` appended. `text` is the whole section, heading first; a missing
-    or differently levelled heading is normalised to `## Definition of done`."""
-    new = text.rstrip().splitlines()
+    or differently levelled heading is normalised to `## Definition of done`.
+    Body-convention lines in `text` are dropped: they belong to the body,
+    not the section, and `depend` and `link` own them."""
+    new = [l for l in text.rstrip().splitlines() if not CONVENTION_LINE.fullmatch(l)]
     while new and not new[0].strip():
         new.pop(0)
     heading = f"## {DOD_TITLE}"
@@ -372,7 +374,10 @@ def cmd_claim(gh, a):
     ref = session_ref(a.session)
     set_state(gh, a.number, "in-progress")
     at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    gh.call("POST", f"/issues/{a.number}/comments", {"body": f"claimed by {ref} at {at}"})
+    try:
+        gh.call("POST", f"/issues/{a.number}/comments", {"body": f"claimed by {ref} at {at}"})
+    except Failure as e:
+        raise Failure(f"{e}; issue #{a.number} is already state:in-progress without a claim comment")
     return {"number": a.number, "claimed_by": ref, "claimed_at": at}
 
 
@@ -424,11 +429,17 @@ def cmd_request_feature(gh, a):
         f"Kind: {a.kind.strip()}\n\n### Example\n\n{example.strip()}\n\n### Why\n\n{why.strip()}\n"
     )
     mirror_labels = [validate_label("state", "blocked"), validate_label("source", "own")]
-    mirror = create_issue(gh, f"Request to {a.to}: {a.title}", mirror_body, mirror_labels)
-    remote_gh.call("PATCH", f"/issues/{remote['number']}",
-                   {"body": remote_body(f"{gh.repo}#{mirror['number']}")})
-    remote_gh.call("POST", f"/issues/{remote['number']}/comments",
-                   {"body": f"Requested by {gh.repo}#{mirror['number']}: {mirror['html_url']}"})
+    # From here a failure leaves the remote request open: say so, with its
+    # URL, so the operator can finish or drop it rather than file a twin.
+    try:
+        mirror = create_issue(gh, f"Request to {a.to}: {a.title}", mirror_body, mirror_labels)
+        remote_gh.call("PATCH", f"/issues/{remote['number']}",
+                       {"body": remote_body(f"{gh.repo}#{mirror['number']}")})
+        remote_gh.call("POST", f"/issues/{remote['number']}/comments",
+                       {"body": f"Requested by {gh.repo}#{mirror['number']}: {mirror['html_url']}"})
+    except Failure as e:
+        raise Failure(f"{e}; remote request already opened at {remote['html_url']}, "
+                      f"not yet linked to a mirror here")
     return {"remote": {"number": remote["number"], "url": remote["html_url"]},
             "mirror": {"number": mirror["number"], "url": mirror["html_url"]}}
 

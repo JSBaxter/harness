@@ -30,7 +30,11 @@ expect_rc() {
 
 cleanup() {
   for n in "${created[@]:-}"; do
-    [ -n "$n" ] && "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null 2>&1 || true
+    [ -n "$n" ] || continue
+    # one retry: a burst of creates can trip GitHub's secondary rate limit
+    "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null 2>&1 \
+      || { sleep 5; "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null; } \
+      || echo "WARN: could not close fixture issue #$n in $CELLQ_TEST_REPO"
   done
   rm -rf "$tmp"
 }
@@ -234,6 +238,17 @@ else
   body_of "$rn" | grep -F 'expected: `{"y": 1}`' >/dev/null && ok || bad "remote body lacks the example"
   body_of "$mn" | grep -F "https://github.com/$R/issues/$rn" >/dev/null && ok || bad "mirror body does not link the remote"
   api "issues/$rn/comments" --jq '.[].body' | grep -F "https://github.com/$R/issues/$mn" >/dev/null && ok || bad "remote has no comment linking the mirror"
+  # scope on the form-rendered body: the empty `### Definition of done` becomes the `##` section, the other headings stay
+  printf '## Definition of done\n\nInputs: from the example\n\nDepends on: #1\n' >"$tmp/dod3.md"   # a stray convention line is dropped
+  expect_out "{\"number\": $rn, \"route\": \"small\", \"priority\": 1, \"state\": \"ready\"}" \
+    scope "$rn" --dod "$tmp/dod3.md" --route small --priority 1 --repo "$R"
+  [ "$(body_of "$rn" | grep -cxF '## Definition of done')" -eq 1 ] && ok || bad "scope on a form body: ## heading count"
+  body_of "$rn" | grep -xF '### Definition of done' >/dev/null && bad "scope on a form body kept the ### heading" || ok
+  body_of "$rn" | grep -F 'Inputs: from the example' >/dev/null && ok || bad "scope on a form body did not write the dod"
+  body_of "$rn" | grep '^Depends on:' >/dev/null && bad "scope wrote a Depends on line from the dod file" || ok
+  for h in 'Requesting cell and issue' 'What is needed' 'Example' 'Why' 'Priority hint'; do
+    body_of "$rn" | grep -xF "### $h" >/dev/null && ok || bad "scope on a form body lost heading $h"
+  done
 fi
 
 echo "passed=$pass failed=$fail"
