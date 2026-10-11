@@ -59,20 +59,20 @@ absent).
      /^## /        { if (hit) print name body; pc = ($0 == "## Pending changes"); name = ""; hit = 0 }
      pc && /^### / { if (hit) print name body; name = $0; body = ""; hit = 0; next }
      pc && name    { body = body "\n" $0;
-                     if ($0 ~ "^(#+ |\\*\\*)?Linked issues?.*#" n "([^0-9]|$)") hit = 1 }
+                     if ($0 ~ "^(- )?(#+ |\\*\\*)?Linked issues?.*#" n "([^0-9]|$)") hit = 1 }
      END           { if (hit) print name body }' specs/<area>.md
-   sed -n '/^## Pending changes/,/^## /p' specs/<area>.md | grep -E '^Linked issues?:.*#<n>([^0-9]|$)'
+   sed -n '/^## Pending changes/,/^## /p' specs/<area>.md | grep -E '^(- )?Linked issues?:.*#<n>([^0-9]|$)'
    ```
-   The awk prints every delta entry that links `#<n>`, in order; the
-   `sed | grep` finds the new-spec line. If more than one entry links
-   `#<n>` (a spec PR carried several deltas; the spec's open question on
-   this defaults to one run per parent), treat their criteria as one list:
+   The `grep -l` only names candidate files. In each, the awk decides: it
+   prints every delta entry that links `#<n>`, in order, and when it
+   prints anything those entries are the delta. Only when it prints
+   nothing is the `sed | grep` consulted, and a line it finds means the
+   new-spec shape (that grep also matches a field inside an entry, which
+   is why it is not consulted first). If more than one entry links `#<n>`
+   (a spec PR carried several deltas; the spec's open question on this
+   defaults to one run per parent), treat their criteria as one list:
    everything below folds all of them in one PR when every criterion
-   passes, and folds none when any fails. A sub-spec whose header says it
-   folds into another spec and is then deleted (the shape `split-spec`
-   gives a change-scoped sub-spec) is folded as its header says: its
-   shipped Behavior goes into the spec it names, and the file is deleted,
-   in the same PR.
+   passes, and folds none when any fails.
 
    If nothing in any spec links `#<n>`, or the delta has no acceptance
    criteria, the spec is not foldable as written: record that on the
@@ -94,25 +94,37 @@ absent).
    (In an Actions run the checkout already is the default branch; still
    fetch, and confirm `git rev-parse HEAD` equals `git rev-parse
    origin/<default>` before trusting it.) Read CLAUDE.md there for the
-   test command. Then, for each line under
-   the delta's `Acceptance criteria`, decide pass or fail and keep the
+   test command. The list to evaluate is every line under the delta's
+   `Acceptance criteria`, plus every statement in its **What changes** that
+   no criterion covers, each treated as a criterion in its own right: it
+   describes behaviour the spec is about to assert, so it needs evidence
+   like any other, and this is how all of What changes reaches Behavior
+   with a test named (step 3). For each, decide pass or fail and keep the
    evidence: a test name and its result, a command and its output, or a
    file and line. Write one line per criterion, exactly in this form, with
-   the criterion quoted as the delta states it:
+   the criterion quoted word for word as the delta states it (the gap
+   title in step 4 is matched on it):
    ```
    PASS <criterion> — <evidence>
    FAIL <criterion> — <evidence>
    ```
-   For example:
+   For example, for a delta whose criteria read "`cellq threshold
+   task.max_files` prints the value from `thresholds.yml`" and "`cellq
+   threshold no.such.key` exits non-zero and stderr names `no.such.key`":
    ```
-   PASS `cellq threshold task.max_files` prints the value as JSON — test_threshold_reads_scalar passed (pytest, exit 0)
-   FAIL a missing key exits non-zero naming the key — `cellq threshold no.such.key` printed `null` and exited 0; stderr empty
+   PASS `cellq threshold task.max_files` prints the value from `thresholds.yml` — test_threshold_reads_scalar passed (pytest, exit 0)
+   FAIL `cellq threshold no.such.key` exits non-zero and stderr names `no.such.key` — `cellq threshold no.such.key` printed `null` and exited 0; stderr empty
    ```
    Rules:
    - Every criterion gets a line; none is skipped, deferred or marked
-     partial. A criterion you cannot exercise (the resource it needs is not
-     reachable from this session, the command it names does not exist) is
-     a `FAIL` whose evidence says what could not be run and why.
+     partial. A criterion stated against a fixture (a cell rendered from
+     the project template, a temporary thresholds file, a scratch issue)
+     is exercised by building that fixture in the worktree or the test
+     repository; building it is part of the check, not a reason to fail
+     it. A criterion you cannot exercise is one whose check needs a
+     credential, network or surface this session has no way to obtain, or
+     a command that does not exist; it is a `FAIL` whose evidence says
+     exactly what could not be run and why.
    - The kind of evidence follows the kind of criterion. A criterion about
      behaviour (something runs, returns, exits, refuses) passes only on a
      test's result or a command's output; one about content (a file says,
@@ -133,9 +145,10 @@ absent).
    the worktree from step 2), edit the spec file and nothing else:
    - Move the delta's **What changes** content into `## Behavior`, as
      statements, under the heading of the area each one belongs to (add a
-     heading only when none fits). Cut one statement per acceptance
-     criterion, worded from What changes, so that each statement has one
-     evidence line, and end it by naming what that line named:
+     heading only when none fits). Cut one statement per evidence line,
+     worded from What changes, so that all of What changes moves and each
+     statement has exactly one line of evidence behind it; end it by
+     naming what that line named:
      ```markdown
      - <the statement> — test: <test name>
      ```
@@ -143,13 +156,12 @@ absent).
      to check the statement: the test name; the command, when the evidence
      was a command (`— test: cellq threshold no.such.key exits non-zero`);
      or the file and line, when the criterion was about content
-     (`— test: README.md:12`). What-changes content that no criterion
-     covers has no evidence and does not enter Behavior; list it in the PR
-     body under `## Unverified` for James to decide.
+     (`— test: README.md:12`).
    - For a new spec, Behavior is already written: add the `— test:` ending
      to each statement a criterion covers, change `Status: draft` to
-     `Status: active`, and leave the top-level `## Acceptance criteria`
-     where it is.
+     `Status: active`, leave the top-level `## Acceptance criteria` where
+     it is, and replace the whole `## Pending changes` body (the "this
+     spec is new" text and the bare `Linked issue:` line) with `None.`
    - Delete from `## Behavior` any statement **What is removed** names.
      **What stays** describes statements that are already there; leave
      them as they are.
@@ -212,16 +224,21 @@ absent).
    ## Audit
    <the three questions from step 6>
    ```
-   Before filing, look for an earlier gap with the same title
-   (`gh issue list --state all --search '"Gap: <criterion>" in:title'
-   --json number,state,labels`). One that is open already is this gap:
-   link it if it is not yet a sub-issue and file nothing new. One closed
-   with `state:dropped` means James has said the criterion is wrong; do
-   not file it again, and instead send the spec back for editing:
-   ```bash
-   cellq state <n> blocked --reason "converge: criterion dropped in #<gap>; the delta in specs/<area>.md needs editing"
-   ```
-   Otherwise file it and make it a sub-issue of the parent:
+   Before filing, look for an earlier gap with the same title: `gh issue
+   list --state all --search "Gap: <criterion> in:title" --json
+   number,state,labels` (write the criterion into a search string without
+   its backticks and quotes; without `gh`, `GET search/issues?q=repo:<o>/
+   <r>+<words>+in:title`; if the search cannot run at all, file anyway: a
+   duplicate costs James a close, a lost gap costs a release). One that is
+   open already is this gap: link it if it is not yet a sub-issue and file
+   nothing new. One that is closed (`state:done` with the criterion still
+   failing, or `state:dropped`, which the grooming ceremony also sets on a
+   stale issue) is refiled, with a line in the new body naming the
+   earlier one and how to end the loop if the criterion itself is wrong:
+   "Refiles #<old>, closed as <state>. If this criterion should not hold,
+   the fix is to edit the delta in `specs/<area>.md`; closing this issue
+   again will file it again." Then file it and make it a sub-issue of the
+   parent:
    ```bash
    cellq idea "Gap: <criterion>" --body <file> --source agent
    cellq link <n> <gap>
