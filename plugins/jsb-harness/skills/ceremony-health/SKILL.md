@@ -229,8 +229,10 @@ those lines into the report.
      rule the cell holds to), its `## Non-goals` (something the cell will
      not do), the README (what a reader of the repository needs), or a new
      ADR under `docs/adr/` in the `adr` skill's form (a decision worth
-     remembering). No issue; the report lists it as moved, with the PR as
-     its action.
+     remembering; take the template only, and link the file from the
+     spec's `## Decisions`). No issue; the report lists it as moved, with
+     the PR as its action, or `in progress: #<parent>` for a draft spec
+     being built (step 3), for which nothing is proposed.
    - **Dead**: as an edit kept for the spec branch of step 6, delete the
      statement from Behavior. When every statement of the spec is dead and another spec
      in `specs/` now describes the capability, instead change the spec's
@@ -290,7 +292,7 @@ those lines into the report.
      close with the gate.
 
 6. **One proposal PR per spec.** For each spec with any fold (step 4),
-   deletion, supersession or test reference (step 5), first look for a
+   move, deletion, supersession or test reference (step 5), first look for a
    health PR already waiting on James: an open PR labelled `proposal`
    whose head branch starts `health/<spec-name>-` (`gh pr list --state
    open --label proposal --json number,headRefName,body`). When one
@@ -328,8 +330,9 @@ those lines into the report.
    step 3 writes it, for a fold's routed items; a `## Spec changes`
    section in `/ship` step 9's form, one line per statement the diff adds
    to, changes in, or removes from Behavior (`<spec file>: "<statement>"
-   — test: <name>`, or `— test: removed`, with `(moved to <where>)` after
-   `removed` for a moved statement). A fold's parent is closed already, so
+   — test: <name>`, or `— test: removed`, which is also the line for a
+   moved statement; its destination is in `## Moved out of Behavior`). A
+   fold's parent is closed already, so
    no `Closes` line is needed; name the parent in `## Folded` instead.
    Open no PR for a spec with nothing to change.
 
@@ -358,7 +361,7 @@ those lines into the report.
    ### Moved out of Behavior
    | Spec | Statement | Destination | Action |
    |---|---|---|---|
-   | <name> | <statement> | Constraints \| Non-goals \| README.md \| docs/adr/<file> | PR #<n> |
+   | <name> | <statement> | Constraints \| Non-goals \| README.md \| docs/adr/<file> | PR #<n> \| in progress: #<parent> |
 
    ### Proposals and gaps
    - PR #<n> <spec>: folded <delta>; removed <k> statements; named <k> tests; moved <k> out of Behavior

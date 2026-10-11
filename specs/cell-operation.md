@@ -124,7 +124,9 @@ Runs in a fresh session when the last sub-issue of a parent closes.
    UI appearance, a screenshot comparison); a command's output or a file
    and line is evidence of a check, not a test, and a behaviour criterion
    with no test fails. A criterion about documentation, process or
-   convention passes on the file and line that shows it.
+   convention passes on the file and line that shows it. A What-changes
+   claim about what the software does that no criterion covers is checked
+   for a test the same way, so nothing enters Behavior without one.
 3. All pass: opens a docs-only PR with the `proposal` label that deletes
    the delta from Pending changes and moves its content out: what the
    software does into Behavior, each statement naming its test;

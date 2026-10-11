@@ -110,14 +110,19 @@ absent).
    fetch, and if `git rev-parse HEAD` equals `git rev-parse
    origin/<default>` work in place; if not, add the worktree as above.)
    Read CLAUDE.md there for the test command. The list to evaluate is
-   every line under the delta's `Acceptance criteria`, and nothing else:
-   the criteria are what the delta promised and what the fold-or-gap
-   decision below turns on. For each, decide pass or fail and keep the
-   evidence: for a behaviour criterion, a test name and its result; for a
-   criterion about documentation, process or convention, the file and line
-   that shows it. Write one line per criterion, exactly in this form, with
-   the criterion quoted word for word as the delta states it (the gap
-   title in step 4 is matched on it):
+   every line under the delta's `Acceptance criteria`, and after them
+   each claim in **What changes** about what the software does that no
+   criterion covers (nothing enters Behavior without a test, step 3, so
+   such a claim is checked for one here): the criteria are what the delta
+   promised, the uncovered claims are what it described, and the
+   fold-or-gap decision below turns on all of them. For each, decide pass
+   or fail and keep the evidence: for a behaviour criterion or claim, a
+   test name and its result; for a criterion about documentation, process
+   or convention, the file and line that shows it, or, when it says
+   something is absent, the search that found nothing. Write one line per
+   criterion or claim, exactly in this form, with the criterion quoted
+   word for word as the delta states it (the gap title in step 4 is
+   matched on it):
    ```
    PASS <criterion> — <evidence>
    FAIL <criterion> — <evidence>
@@ -157,10 +162,15 @@ absent).
      tests/` returned nothing), then what a command showed if you ran one;
      the gap it opens (step 4) is read as a request for the test. Writing
      the missing test is a fix, and fixes are not this skill's work (step
-     5).
+     5). An uncovered What-changes claim is evaluated the same way: its
+     test is the one the search finds, and when none asserts it, its gap
+     is closed by a test, or by editing the delta to drop the claim or
+     move it out of What changes.
    - A criterion about documentation, process or convention (a file says,
      contains or names something; a step a person takes by hand; a name
-     or layout that holds) passes on the file and line that shows it. No
+     or layout that holds) passes on the file and line that shows it, or,
+     for one that says something is absent, on the search that found
+     nothing (`grep -rn '<value>' plugins/` returned nothing). No
      test is asked of it, because a test that only asserts a document
      changed is not wanted; and what it describes is not a Behavior
      statement, so step 3 folds it outside Behavior.
@@ -176,8 +186,8 @@ absent).
    from so that a later run never collides with it
    (`git switch -c converge/fold-<n>-<short sha> origin/<default>`, in
    the worktree from step 2), edit the spec file, and the README or
-   `docs/adr/` only for what the second bullet routes there, and nothing
-   else:
+   `docs/adr/` only for what the documentation, process or convention
+   bullet below routes there, and nothing else:
    - Sort the delta's **What changes** content into statements and route
      each by what it is about:
      - **What the software does** (something runs, returns, exits,
@@ -191,14 +201,10 @@ absent).
        The thing after `test:` is a test name and nothing else: a test
        function or case the runner re-runs, or a screenshot comparison
        for UI appearance; never a command and never a file and line.
-       Behaviour content that no criterion covers enters Behavior only
-       with a test: search the suite for one that asserts it (the
-       identifiers it uses, grepped across the tests, as the health
-       ceremony's step 2 does) and name it; when none asserts it, the
-       statement does not fold, and the PR body lists it under
-       `## Outside Behavior` as not folded, so James can add a criterion
-       to the delta or let it go. A statement without a test never enters
-       Behavior.
+       Behaviour content that no criterion covers has its test from its
+       own evidence line in step 2 (a fold happens only when every line
+       passed, so each has one): name it the same way. A statement
+       without a test never enters Behavior.
      - **Documentation, process or convention** (what a document says, a
        step a person takes by hand, how a thing is named or laid out)
        never enters Behavior and gets no `— test:` line. Fold it where it
@@ -206,14 +212,14 @@ absent).
        something the cell will not do into `## Non-goals`; what a reader
        of the repository needs into the README; a decision worth
        remembering into an ADR under `docs/adr/`, in the `adr` skill's
-       form. The PR body lists each such item and where it went under
-       `## Outside Behavior`.
+       form (take its template only, not its other steps, and link the
+       new file from the spec's `## Decisions`). The PR body lists each
+       such item and where it went under `## Outside Behavior`.
    - For a new spec, Behavior is already written: add the `— test:` ending
-     to each statement a criterion covers; route a statement that is
-     documentation, process or convention out of Behavior as above; keep a
-     behaviour statement no criterion covers only with a test found as
-     above, and otherwise remove it and list it under `## Outside
-     Behavior` as not folded. Then change `Status: draft` to
+     to each statement a criterion covers, and to each behaviour
+     statement no criterion covers the test its step 2 line names; route
+     a statement that is documentation, process or convention out of
+     Behavior as above. Then change `Status: draft` to
      `Status: active`, leave the top-level `## Acceptance criteria` where
      it is, and replace the whole `## Pending changes` body (the "this
      spec is new" text and the bare `Linked issue:` line) with `None.`
@@ -251,13 +257,13 @@ absent).
    - a `## Spec changes` section in `/ship` step 9's form, one line per
      statement the diff adds to, changes in, or removes from Behavior
      (`<spec file>: "<statement>" — test: <test name>`, or `— test:
-     removed`, with `(moved to <where>)` after `removed` when a new-spec
-     fold routed the statement out of Behavior; a new-spec fold lists
-     each statement it gave a test);
-   - `## Outside Behavior`, listing each What-changes item that did not
-     become a Behavior statement and where it went (`Constraints`,
-     `Non-goals`, `README.md`, `docs/adr/<file>`, or `not folded: no
-     criterion, no test asserts it`), or omitted when there is none;
+     removed`, which is also the line for a statement a new-spec fold
+     routed out of Behavior; a new-spec fold lists each statement it
+     gave a test);
+   - `## Outside Behavior`, listing each What-changes item (or new-spec
+     Behavior statement) that did not stay a Behavior statement and where
+     it went (`Constraints`, `Non-goals`, `README.md`, `docs/adr/<file>`),
+     or omitted when there is none;
    - `Closes #<n>`, so the merge closes the parent.
    Open no other PR and no issue. Then move the parent to in-review through
    the adapter, so the queue shows a PR exists for it and the grooming
@@ -276,7 +282,8 @@ absent).
    parent and carries every evidence line from step 2, passes included, in
    this form:
    ```markdown
-   Gap found by converge on #<n> (parent). The criterion in the title
+   Gap found by converge on #<n> (parent). The criterion (or uncovered
+   What-changes claim) in the title
    failed against origin/<default> at <short sha>; the delta `<delta name>`
    in `specs/<area>.md` stays in Pending changes until this closes.
 
@@ -289,7 +296,9 @@ absent).
    ```
    When the criterion failed for want of a test, say so under
    `## Suggested fix` (step 5): which test to write and where, so the gap
-   reads as a request for a test, not for a code change.
+   reads as a request for a test, not for a code change; for an uncovered
+   What-changes claim, also that editing the delta to drop or move the
+   claim closes it.
    Before filing, look for an earlier gap with the same title: `gh issue
    list --state all --search "<words> in:title" --json
    number,title,state,labels`, where `<words>` are the criterion's words
