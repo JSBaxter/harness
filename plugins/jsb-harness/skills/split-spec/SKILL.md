@@ -52,13 +52,19 @@ never with raw `gh` issue writes.
            print "Incomplete delta: missing " f[i]
      }' specs/<file>
    ```
-   The one exception is a new spec: its Pending changes says the spec is
-   new and its Behavior is the whole contract, so check the top-level
-   sections instead. `## Behavior` stands in for the three "What" fields,
-   and `## Acceptance criteria`, `## Non-goals`, `## Constraints`,
-   `## Open questions` and a `Linked issue:` line must each be present. If
-   anything printed, stop: do not invoke spec-splitter and file no issues.
-   Send the spec back through /spec to complete it.
+   The one exception is a new spec: its Pending changes has no `###` entry
+   (it says the spec is new) and its Behavior is the whole contract, so
+   check the top-level sections instead. `## Behavior` stands in for the
+   three "What" fields; the rest are `##` sections and a `Linked issue:`
+   line:
+   ```bash
+   for f in "## Behavior" "## Acceptance criteria" "## Non-goals" \
+            "## Constraints" "## Open questions" "Linked issue:"; do
+     grep -q "^$f" specs/<file> || echo "Incomplete delta: missing ${f#\#\# }"
+   done
+   ```
+   If either check printed anything, stop: do not invoke spec-splitter and
+   file no issues. Send the spec back through /spec to complete it.
 2. Invoke the **spec-splitter** agent with the spec content and the three
    sizing values from the rule below. It returns an assessment, ordered task
    list with acceptance criteria and dependencies, a parallelism map, and any
@@ -90,7 +96,10 @@ never with raw `gh` issue writes.
    Tasks start in `state:new`; `scope` writes their route and moves them to
    ready.
 7. Report: the task table (title, deps, parallel-safe or serialized) and issue
-   numbers. Suggest /dispatch if the user wants agents started on the ready set.
+   numbers. Say that the tasks sit in `state:new` until `scope` has written
+   each one's route and moved it to ready, after which `cellq ready` lists
+   the ones with no unmet dependency; that list is what starts agents on
+   them.
 
 ## Sizing rule (also enforced by spec-splitter)
 
