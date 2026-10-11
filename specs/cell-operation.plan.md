@@ -51,12 +51,10 @@ is a separate decision about hands-off operation, not made here.
 A claim is `state:in-progress` plus a comment `claimed by <session ref> at
 <iso time>`. Stale-claim age is read from that comment.
 
-**`cellq` CLI**: `cellq <verb> [args] --repo o/r`, JSON on stdout, exit 0
-or a non-zero code with a one-line reason. Token from `GH_TOKEN`, else
-`gh auth token`. Verbs: `idea <title> [--body f] [--source s]`, `scope <n>
---dod f --route r --priority p`, `claim <n>`, `complete <n>`,
-`request-feature <title> --kind k`, `state <n> <state> [--reason r]`,
-`ready`, `link <parent> <child>`, `merged-count`.
+**`cellq` CLI**: the full contract, including output shapes, the
+`priority:` label group, the `Depends on:` body line, the request mirror
+issue and the read verbs, is the sub-spec `specs/cellq.md` (split 2026-10-11).
+Skills and workflows code against that file.
 
 **`thresholds.yml`**: the keys in the spec, under `route`, `task`, `spec`,
 `claim`, `review`, `ceremonies`, `edges`. Skills read it with a one-line
@@ -71,10 +69,17 @@ the reviewer.
 <evidence>`, in the fold PR body or the gap issue body.
 
 **Session start from a workflow**: each reusable workflow invokes
-`anthropics/claude-code-action` with `claude_code_oauth_token`, the
-session-start hook that copies the plugin in, and a prompt of one line:
-`Run /<skill> on issue #<n>`. The skill is the procedure; the workflow
-only names it.
+`anthropics/claude-code-action` with `claude_code_oauth_token` and a prompt
+of one line: `Run /<skill> on issue #<n>`. The skill is the procedure; the
+workflow only names it. Skills and `cellq` reach the runner through a
+composite action `setup-cell`, a sibling of `setup-reviewer`, because no
+plugin install exists in Actions (found at split: the plan's "session-start
+hook" does not exist; the hook that copies the plugin lives in project
+repos for cloud sessions, not here).
+
+**Done state**: `Closes #n` closes the issue on merge but leaves its
+`state:` label. `cell-ceremony.yml`, which runs on every merge, calls
+`cellq complete` for each issue the merged PR closes.
 
 ## Constraints inherited
 
@@ -110,6 +115,7 @@ only names it.
 | Actions minutes: one session per issue open and per parent close | Count after the first cell's first fortnight; routines are the fallback for scope only |
 | Merged-count search caps at 1000 results | Use the search `total_count`, not a list |
 | Converge run per parent misses a spec PR that carried several deltas | Spec open question 2: default per parent; revisit when it happens |
+| Events created with `GITHUB_TOKEN` do not trigger workflows: a ceremony issue filed by `cell-ceremony.yml` fires no `cell-scope.yml`, and a sub-issue closed by `cellq complete` from inside Actions fires no `cell-converge.yml` | Ceremony issues are filed directly in ready (scope skips `source:ceremony`). Grooming also detects a parent whose sub-issues are all closed with no fold PR and runs converge on it. |
 
 ## Out of scope
 
