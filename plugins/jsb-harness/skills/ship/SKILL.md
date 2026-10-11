@@ -8,20 +8,35 @@ description: Exit checklist before opening a PR — tests, self-review against s
 Run the pre-PR gate, then open the PR. Run this at the end of every implementation
 task; don't open PRs any other way.
 
+`cellq` below is the queue adapter (`plugins/jsb-harness/bin/cellq`, contract in
+the harness's `specs/cellq.md`). Every threshold is read through it from the
+cell's `thresholds.yml`; this skill carries no numbers. Issue state is set
+through it too, never with raw `gh issue edit`.
+
 ## Steps
 
-1. **Scope check** — `git diff <base>...HEAD --stat`. If the diff exceeds ~400
-   lines or ~5 files, stop and propose splitting into stacked PRs before
-   continuing. Big diffs are the main cause of bad agent PRs.
+1. **Scope check** — `git diff <base>...HEAD --stat`, against the cell's
+   limits:
+   ```bash
+   cellq threshold task.max_diff_lines
+   cellq threshold task.max_files
+   ```
+   If `cellq threshold` fails because the repo has no `thresholds.yml` (exit
+   1, naming the file), stop and say so; do not substitute a number from
+   memory or from another repo. If the diff exceeds either value, stop and
+   propose splitting into stacked PRs before continuing. Big diffs are the
+   main cause of bad agent PRs.
 2. **Tests** — run the project's test suite (see CLAUDE.md for the command). All
    green or you stop and fix; never open a PR with known-failing tests. Report
    actual output, not a summary of hope.
 3. **Lint/format** — run the project's linters (ruff/clippy/eslint etc. per
    CLAUDE.md).
 4. **Self-review** — invoke the **reviewer** agent (fresh context) on the diff.
-   Fix Important findings, rerun tests, re-review until the reviewer approves or
-   twice with no progress — in the no-progress case, note the disputed findings
-   in the PR body for the human.
+   Fix Important findings, rerun tests, re-review until the reviewer approves
+   or the round count reaches `cellq threshold review.max_rounds` with no
+   progress — in the no-progress case, note the disputed findings in the PR
+   body for the human. Give the reviewer the draft PR body (step 9), because
+   its spec-behaviour check reads the `## Spec changes` section.
 5. **ADR check** — did this work establish a new convention or make a real
    choice? If yes, run /adr before opening the PR.
 6. **Commit hygiene** — commits should be small and each message follows
@@ -131,10 +146,24 @@ task; don't open PRs any other way.
    ```
    PR body must include: `Closes #NN` (the driving issue), a summary of what
    changed and why, test evidence (what was run, result), screenshots per
-   step 7 for visual changes, and any disputed reviewer findings from
-   step 4. If `gh pr edit` hits the projectCards GraphQL deprecation error,
-   PATCH the body via `gh api -X PATCH repos/<owner>/<repo>/pulls/<n>`.
-10. Report the PR URL and the review-gate status once CI kicks off. On a
+   step 7 for visual changes, any disputed reviewer findings from step 4,
+   and a **`## Spec changes`** section. That section is either the single
+   word `none`, or one line per Behavior statement the diff changes or adds
+   in a `specs/*.md` file, in exactly this form:
+   ```markdown
+   ## Spec changes
+   <spec file>: "<statement>" — test: <test name>
+   ```
+   The reviewer and James check this heading against the diff: `none` with
+   a spec file in the diff, or a listed statement the diff does not touch,
+   is an Important finding. If `gh pr edit` hits the projectCards GraphQL
+   deprecation error, PATCH the body via
+   `gh api -X PATCH repos/<owner>/<repo>/pulls/<n>`.
+10. **Move the issue to in-review** as soon as the PR exists:
+   ```bash
+   cellq state <issue> in-review
+   ```
+11. Report the PR URL and the review-gate status once CI kicks off. On a
    proposal PR, expect `claude-review` to pass immediately with "Proposal PR
    (`proposal` label)" as its reason — if it instead starts an agent review,
    the label didn't take.
