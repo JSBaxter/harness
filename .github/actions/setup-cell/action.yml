@@ -8,10 +8,11 @@
 # claude-code-action run on a runner has neither, so the skills the workflow
 # prompt names (`Run /<skill> on issue #<n>`, ADR 0008)
 # would not resolve and `cellq` would not be on PATH. This composite action is
-# the sibling of setup-reviewer: the harness checkout that GitHub makes for
-# any `uses: JSBaxter/harness/...` reference already contains the plugin, so
-# we copy from `$GITHUB_ACTION_PATH/../../../plugins/jsb-harness` at run time.
-# One source serves every repo; project repos carry no copy (ADR 0005, 0006).
+# the sibling of setup-reviewer: the workflow checks the harness out at its
+# own commit into `.harness/` and runs this action from there (ADR 0010), so
+# the checkout already contains the plugin and we copy from
+# `$GITHUB_ACTION_PATH/../../../plugins/jsb-harness` at run time. One source
+# serves every repo; project repos carry no copy (ADR 0005, 0006).
 #
 # Delivery point: $HOME/.claude/skills, not the workspace. A workspace-
 # relative `.claude/agents/` did not register under claude-code-action
@@ -27,9 +28,9 @@
 name: setup-cell
 description: >-
   Deliver every jsb-harness skill into $HOME/.claude/skills/<name>/SKILL.md and
-  the cellq queue adapter onto PATH, from the harness checkout that this
-  action's own reference brings. Fails loudly if a source is missing, and lists
-  what it delivered in the log and the step summary.
+  the cellq queue adapter onto PATH, from the harness checkout the workflow
+  made at its own commit. Fails loudly if a source is missing, and lists what
+  it delivered in the log and the step summary.
 
 runs:
   using: composite

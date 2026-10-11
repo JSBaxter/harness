@@ -65,9 +65,26 @@ jobs:
       # The reviewer agent is NOT carried by project repos — it is delivered
       # from the harness at run time, so one definition serves every repo (ADR
       # 0005). A repo opts out by committing .claude/agents/reviewer-override.md.
+      #
+      # The harness is checked out at this workflow file's own commit
+      # (job.workflow_sha), so the action and the reviewer it delivers come
+      # from the same pinned commit the caller stub names, not from `main`
+      # (ADR 0010). `uses: ./...` resolves against the caller's workspace, so
+      # the checkout lands under it. Removed again before the fixer runs, so
+      # it can never be committed.
+      - name: Check out the harness at this workflow's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JSBaxter/harness
+          ref: ${{ job.workflow_sha }}
+          path: .harness
+
       - name: Deliver the reviewer agent
         id: reviewer
-        uses: JSBaxter/harness/.github/actions/setup-reviewer@main
+        uses: ./.harness/.github/actions/setup-reviewer
+
+      - name: Remove the harness checkout
+        run: rm -rf .harness
 
       # Decide whether this PR gets agent-reviewed at all. Two kinds skip the
       # reviewer and stamp claude-review green directly (James's own merge is the

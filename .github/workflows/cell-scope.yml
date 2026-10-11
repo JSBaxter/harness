@@ -73,16 +73,24 @@ jobs:
 
       # Skills and cellq are delivered from the harness at run time; the
       # calling repo carries neither (ADR 0005 pattern, see the action).
-      # Known exposure: ADR 0006 decision 3 accepted this `@main` second hop
-      # for setup-reviewer because it carried prose only. setup-cell extends
-      # it to `cellq`, an executable that writes issue state, so a bad harness
-      # merge reaches every cell's next scope run without a bump PR. Accepted
-      # for now because ADR 0009 already ships cellq unpinned to laptops and
-      # cloud sessions through the plugin copy, so Actions adds no new
-      # surface; revisit (pin to a SHA with Renovate tracking it) if a cellq
-      # regression ever reaches a cell this way.
+      # The harness is checked out at this workflow file's own commit
+      # (job.workflow_sha), so `cellq` and the skills come from the same
+      # pinned commit the caller stub names, not from `main`: a bad harness
+      # merge reaches a cell only through its bump PR (ADR 0010). `uses: ./...`
+      # resolves against the caller's workspace, so the checkout lands under
+      # it; removed again once delivery is done.
+      - name: Check out the harness at this workflow's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JSBaxter/harness
+          ref: ${{ job.workflow_sha }}
+          path: .harness
+
       - name: Deliver skills and cellq
-        uses: JSBaxter/harness/.github/actions/setup-cell@main
+        uses: ./.harness/.github/actions/setup-cell
+
+      - name: Remove the harness checkout
+        run: rm -rf .harness
 
       - name: Scope the issue
         uses: anthropics/claude-code-action@v1

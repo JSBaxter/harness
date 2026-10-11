@@ -71,9 +71,8 @@ harness checkout (`templates/project/`) into a fresh repo.
    `README.md`, and an initial spec stub in `specs/` if the user described the idea.
    - **Review workflow** — the template's `.github/workflows/claude-review.yml`
      is a thin caller of the harness reusable workflow (see harness ADR 0001).
-     It needs the harness repo's Actions access set to `user` once per machine/
-     account: `gh api -X PUT repos/JSBaxter/harness/actions/permissions/access
-     -f access_level=user` (harmless to re-run).
+     The harness is public, so no Actions access-level setting on it is
+     needed for the stub to resolve (ADR 0010).
    - **Stealth repos only:** the stub names `JSBaxter/harness`, which would link
      the accounts — a stealth repo must NOT use it. Replace the stub with a
      self-contained copy of the gate: take the harness reusable workflow, change
