@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+"""cellq: the queue adapter, the only code that knows GitHub's labels,
+sub-issue endpoints and comment formats (ADR 0007, ADR 0009).
+
+Contract: specs/cellq.md. Standard library only, REST only via urllib.
+Every success prints one JSON document on stdout and exits 0. An API or
+validation failure prints one line on stderr and exits 1; a usage or
+environment failure (no repo, no token, unknown verb) exits 2.
+"""
+import argparse
+import http.client
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+VERBS = [
+    "idea", "scope", "claim", "complete", "state", "depend", "link",
+    "request-feature", "ready", "list", "parent", "merged-count", "threshold",
+]
+STUBS = {
+    "scope", "claim", "complete", "request-feature", "depend",
+    "merged-count", "ready", "list", "parent",
+}
+STATES = [
+    "new", "needs-input", "ready", "blocked", "in-progress", "in-review",
+    "done", "dropped",
+]
+# Label groups are single-valued per issue; set_group_label keeps them so.
+# Each entry: (allowed values, label colour). A compiled pattern is allowed
+# as a value for the open-ended `source:cell:<name>`.
+GROUPS = {
+    "state": (STATES, "1D76DB"),
+    "route": (["small", "spec"], "5319E7"),
+    "source": (["own", "ceremony", "agent", re.compile(r"cell:[^\s,]+")], "FBCA04"),
+    "priority": (["1", "2", "3", "4", "5"], "B60205"),
+}
+
+
+class Failure(Exception):
+    """An API or validation failure: one line on stderr, exit 1."""
+
+
+class HTTPFailure(Failure):
+    def __init__(self, status, errors, message):
+        super().__init__(message)
+        self.status = status
+        self.errors = errors  # GitHub's errors[].code values, e.g. "already_exists"
+
+
+class UsageError(Exception):
+    """A usage or environment failure: one line on stderr, exit 2."""
+
+
+# ---------------------------------------------------------------- environment
+
+def find_repo(explicit):
+    if explicit:
+        repo = explicit
+    elif os.environ.get("GITHUB_REPOSITORY"):
+        repo = os.environ["GITHUB_REPOSITORY"]
+    else:
+        try:
+            url = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            raise UsageError("no repository: pass --repo o/r, set GITHUB_REPOSITORY, "
+                             "or run inside a clone with an origin remote")
+        m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", url)
+        if not m:
+            raise UsageError(f"origin remote is not a GitHub repository: {url}")
+        repo = f"{m.group(1)}/{m.group(2)}"
+    if not re.fullmatch(r"[^/\s]+/[^/\s]+", repo):
+        raise UsageError(f"repository must be owner/repo, got: {repo}")
+    return repo
+
+
+def find_token():
+    for var in ("GH_TOKEN", "GITHUB_TOKEN"):
+        if os.environ.get(var):
+            return os.environ[var]
+    try:
+        out = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True)
+    except OSError:
+        out = None
+    if out is not None and out.returncode == 0 and out.stdout.strip():
+        return out.stdout.strip()
+    raise UsageError("no token: set GH_TOKEN or GITHUB_TOKEN, or log in with gh")
+
+
+# ------------------------------------------------------------------- transport
+
+class GitHub:
+    def __init__(self, repo, token):
+        self.repo = repo
+        self.token = token
+        self.base = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+
+    def call(self, method, path, body=None):
+        """One REST call under /repos/{o}/{r}; returns the parsed JSON body
+        (None when empty). Raises Failure on any HTTP or network error."""
+        url = f"{self.base}/repos/{self.repo}{path}"
+        data = None if body is None else json.dumps(body).encode()
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "User-Agent": "cellq",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        try:
+            req = urllib.request.Request(url, data=data, method=method, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read()
+        except urllib.error.HTTPError as e:
+            try:
+                payload = json.loads(e.read())
+            except ValueError:
+                payload = {}
+            errors = [x.get("code", "") for x in payload.get("errors", []) if isinstance(x, dict)]
+            raise HTTPFailure(e.code, errors,
+                              f"{method} {url}: HTTP {e.code} {payload.get('message', '')}".rstrip())
+        except (OSError, ValueError, http.client.HTTPException) as e:
+            raise Failure(f"{method} {url}: {getattr(e, 'reason', e)}")
+        try:
+            return json.loads(raw) if raw else None
+        except ValueError:
+            raise Failure(f"{method} {url}: response is not JSON")
+
+
+# ---------------------------------------------------------------------- labels
+
+def validate_label(group, value):
+    allowed, _ = GROUPS[group]
+    for a in allowed:
+        if a == value or (not isinstance(a, str) and a.fullmatch(value)):
+            return f"{group}:{value}"
+    names = [a if isinstance(a, str) else "cell:<name>" for a in allowed]
+    raise Failure(f"invalid {group}: {value!r} (one of {', '.join(names)})")
+
+
+def ensure_label(gh, name):
+    """Create the label on first use; 422 means it already exists."""
+    group = name.split(":", 1)[0]
+    try:
+        gh.call("POST", "/labels", {"name": name, "color": GROUPS[group][1]})
+    except HTTPFailure as e:
+        if e.status != 422 or "already_exists" not in e.errors:
+            raise
+
+
+def set_group_label(gh, number, group, value):
+    """Set `group:value` on the issue, removing every other label of that
+    group. Returns the issue as fetched before the change."""
+    name = validate_label(group, value)
+    issue = gh.call("GET", f"/issues/{number}")
+    keep = [l["name"] for l in issue["labels"] if not l["name"].startswith(group + ":")]
+    ensure_label(gh, name)
+    gh.call("PUT", f"/issues/{number}/labels", {"labels": keep + [name]})
+    return issue
+
+
+# ----------------------------------------------------------------------- verbs
+
+def cmd_state(gh, a):
+    issue = set_group_label(gh, a.number, "state", a.state)
+    if a.state in ("done", "dropped"):
+        reason = "completed" if a.state == "done" else "not_planned"
+        gh.call("PATCH", f"/issues/{a.number}", {"state": "closed", "state_reason": reason})
+    elif issue["state"] == "closed":
+        gh.call("PATCH", f"/issues/{a.number}", {"state": "open"})
+    if a.reason:
+        gh.call("POST", f"/issues/{a.number}/comments",
+                {"body": f"state: {a.state} — {a.reason}"})
+    return {"number": a.number, "state": a.state}
+
+
+def cmd_idea(gh, a):
+    labels = [validate_label("state", "new"), validate_label("source", a.source)]
+    body = ""
+    if a.body:
+        try:
+            with open(a.body, encoding="utf-8") as f:
+                body = f.read()
+        except OSError as e:
+            raise Failure(f"cannot read body file {a.body}: {e.strerror}")
+    for name in labels:
+        ensure_label(gh, name)
+    issue = gh.call("POST", "/issues", {"title": a.title, "body": body, "labels": labels})
+    return {"number": issue["number"], "url": issue["html_url"]}
+
+
+def cmd_link(gh, a):
+    child = gh.call("GET", f"/issues/{a.child}")
+    try:
+        gh.call("POST", f"/issues/{a.parent}/sub_issues", {"sub_issue_id": child["id"]})
+    except HTTPFailure as e:
+        if e.status not in (404, 410):
+            raise
+        # The sub-issue endpoints are unavailable (a proxy that does not
+        # serve them): fall back to the `Parent: #n` body line, but only
+        # once the parent is known to exist, so a bad number still fails.
+        gh.call("GET", f"/issues/{a.parent}")
+        body, line = child.get("body") or "", f"Parent: #{a.parent}"
+        existing = re.compile(r"^Parent: #\d+[ \t]*\r?$", re.M)
+        if existing.search(body):
+            body = existing.sub(line, body, count=1)
+        else:
+            body = (body.rstrip() + "\n\n" if body.strip() else "") + line + "\n"
+        if body != (child.get("body") or ""):
+            gh.call("PATCH", f"/issues/{a.child}", {"body": body})
+    return {"parent": a.parent, "child": a.child}
+
+
+# ------------------------------------------------------------------ thresholds
+
+def parse_yaml_subset(text, path):
+    """Nested mappings by two-space indent; scalars as int, float or string.
+    No lists, anchors or flow syntax. `#` comments are allowed."""
+    root = {}
+    stack = [(-1, root)]  # (indent, mapping) for each open mapping
+    expect = None         # indent the next line must have after a `key:` opener
+    for lineno, raw in enumerate(text.splitlines(), 1):
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if "\t" in line[:indent] or indent % 2:
+            raise Failure(f"{path}:{lineno}: indent must be a multiple of two spaces")
+        m = re.fullmatch(r"([A-Za-z0-9_-]+):(?:\s+(.*))?", line.strip())
+        if not m:
+            raise Failure(f"{path}:{lineno}: expected `key:` or `key: value`")
+        key, value = m.group(1), m.group(2)
+        if value is not None and value.startswith("#"):
+            value = None
+        if expect is not None and indent != expect:
+            raise Failure(f"{path}:{lineno}: expected a mapping indented {expect} spaces")
+        if expect is None and indent > stack[-1][0] + 2:
+            raise Failure(f"{path}:{lineno}: indented too far")
+        while stack[-1][0] >= indent:
+            stack.pop()
+        if key in stack[-1][1]:
+            raise Failure(f"{path}:{lineno}: duplicate key {key!r}")
+        if value is None:
+            child = {}
+            stack[-1][1][key] = child
+            stack.append((indent, child))
+            expect = indent + 2
+        else:
+            try:
+                stack[-1][1][key] = scalar(value)
+            except ValueError as e:
+                raise Failure(f"{path}:{lineno}: {e}")
+            expect = None
+    if expect is not None:
+        raise Failure(f"{path}: file ends inside an empty mapping")
+    return root
+
+
+def scalar(s):
+    """int, float or string; a quoted string keeps `#`, a bare one stops at ` #`."""
+    if s[0] in "\"'":
+        end = s.find(s[0], 1)
+        if end < 0 or not re.fullmatch(r"\s*(#.*)?", s[end + 1:]):
+            raise ValueError(f"bad quoted value {s!r}")
+        return s[1:end]
+    s = s.split(" #", 1)[0].rstrip()
+    if re.fullmatch(r"[-+]?\d+", s):
+        return int(s)
+    if re.fullmatch(r"[-+]?(\d+\.\d*|\.\d+|\d+)([eE][-+]?\d+)?", s):
+        return float(s)
+    return s
+
+
+def cmd_threshold(_gh, a):
+    path = a.file
+    if not path:
+        try:
+            top = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            raise Failure("thresholds.yml: not inside a git repository and no --file given")
+        path = os.path.join(top, "thresholds.yml")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = parse_yaml_subset(f.read(), path)
+    except FileNotFoundError:
+        raise Failure(f"thresholds file not found: {path}")
+    except (OSError, UnicodeDecodeError) as e:
+        raise Failure(f"cannot read thresholds file {path}: {getattr(e, 'strerror', None) or e}")
+    node = data
+    for part in a.key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            raise Failure(f"threshold key not found: {a.key} in {path}")
+        node = node[part]
+    if isinstance(node, dict):
+        raise Failure(f"threshold key is not a scalar: {a.key} in {path}")
+    return node
+
+
+# ------------------------------------------------------------------------ main
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message):
+        raise UsageError(message)
+
+
+def build_parser():
+    p = Parser(prog="cellq")
+    common = Parser(add_help=False)
+    common.add_argument("--repo", metavar="o/r")
+    sub = p.add_subparsers(dest="verb", metavar="verb")
+
+    s = sub.add_parser("state", parents=[common])
+    s.add_argument("number", type=int)
+    s.add_argument("state")
+    s.add_argument("--reason")
+    s.set_defaults(fn=cmd_state)
+
+    s = sub.add_parser("idea", parents=[common])
+    s.add_argument("title")
+    s.add_argument("--body", metavar="file")
+    s.add_argument("--source", default="own")
+    s.set_defaults(fn=cmd_idea)
+
+    s = sub.add_parser("link", parents=[common])
+    s.add_argument("parent", type=int)
+    s.add_argument("child", type=int)
+    s.set_defaults(fn=cmd_link)
+
+    s = sub.add_parser("threshold", parents=[common])
+    s.add_argument("key")
+    s.add_argument("--file", metavar="path")
+    s.set_defaults(fn=cmd_threshold, offline=True)
+
+    for verb in sorted(STUBS):
+        sub.add_parser(verb, parents=[common])
+    return p
+
+
+def main(argv):
+    try:
+        verb = argv[1] if len(argv) > 1 else None
+        if verb in STUBS:
+            raise UsageError(f"{verb}: not implemented")
+        if verb is None:
+            raise UsageError(f"usage: cellq <verb> [args] [--repo o/r]; verbs: {', '.join(VERBS)}")
+        if verb not in VERBS and verb not in ("-h", "--help"):
+            raise UsageError(f"unknown verb {verb!r}; verbs: {', '.join(VERBS)}")
+        a = build_parser().parse_args(argv[1:])
+        gh = None if getattr(a, "offline", False) else GitHub(find_repo(a.repo), find_token())
+        print(json.dumps(a.fn(gh, a)))
+        return 0
+    except UsageError as e:
+        print(f"cellq: {e}", file=sys.stderr)
+        return 2
+    except Failure as e:
+        print(f"cellq: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
