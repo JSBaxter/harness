@@ -111,8 +111,8 @@ GitHub MCP write tool. Reading is free.
    is the question which settles it answered in the issue with the
    evidence (the agent that claims it investigates first), and describe
    the fix conditional on that answer. A question only James can answer
-   goes in the report instead, not into the finding's body, so that
-   `scope` is not the one left to ask it.
+   goes in the report instead, under "Questions for James", not into the
+   finding's body, so that `scope` is not the one left to ask it.
 
 5. **The sibling-cell candidate.** When step 3 found a second purpose and
    no open issue already names it, open one issue titled exactly
@@ -134,6 +134,10 @@ GitHub MCP write tool. Reading is free.
    cellq idea "Sibling-cell candidate: <purpose>" --body <file> --source ceremony
    cellq state <n> blocked --reason "James's decision: split <purpose> into a sibling cell?"
    ```
+   The two calls belong together: if the second fails, repeat it before
+   doing anything else, and if it keeps failing say so in the report with
+   the issue number, because a decision record left in `new` is what
+   grooming's routing step would next hand to `scope` as a task.
 
 6. **Report and close.** Post the report as a comment on the ceremony
    issue (a comment is not state: `gh issue comment <n> --body-file
@@ -160,6 +164,9 @@ GitHub MCP write tool. Reading is free.
 
    ### Not raised
    - <what was looked at and found sound, one line each area>
+
+   ### Questions for James
+   - <a question only he can answer, with the finding it bears on> | none
    ```
 
    "Not raised" matters: a pass that found nothing in an area says the

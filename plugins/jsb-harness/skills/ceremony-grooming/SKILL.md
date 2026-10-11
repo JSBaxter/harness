@@ -197,11 +197,15 @@ step 9 turns those lines into the report.
    when no cell-scope run followed their opening (an issue opened with an
    Actions token fires no event, and the workflow's guard may not let a
    `source:ceremony` issue through). For the same reason, also collect
-   the issues in `cellq list --state needs-input` on which the repository
-   owner has commented after the question comment (`state: needs-input —
-   ...?`) and no cell-scope re-run followed: run `/scope` on each, which
-   treats the comment as part of the issue. One in `needs-input` with no
-   owner comment since the question is waiting on James; leave it. The
+   the issues in `cellq list --state needs-input` that James has
+   answered: read the comments in order; the question is the *latest*
+   comment whose body starts `state: needs-input —` (there is one per
+   round, and whoever posted it, it is the adapter's, never an answer);
+   the issue is answered when a comment by the repository owner whose
+   body does not start `state:` follows that latest question. Run
+   `/scope` on each answered one; it treats the answer as part of the
+   issue. One with nothing after its latest question is waiting on James;
+   leave it, so the question is never asked twice. The
    one issue `/scope` stops on is a
    ceremony issue the workflow filed (`source:ceremony` with a title
    starting `Ceremony: `) that is still in new, which means the workflow
@@ -224,13 +228,10 @@ step 9 turns those lines into the report.
    parentless issue is not an error; the verb never exits 1 for one. Read
    it as follows:
    - `parent != null` and `sub_issues == []`: `<n>` is a child, not a
-     parent. Its parent is the one to converge; when that parent is open
-     and carries `route:spec` it comes up in this loop on its own; when
-     it is open without that label, run `cellq parent <that parent>` and
-     continue from here with that output; when it is closed (`gh issue
-     view <parent> --json state`), it is the health ceremony's business
-     (step 4 there folds a closed parent whose tasks all closed), not
-     this step's: skip it.
+     parent; skip it. Nothing is to be converged through it: `<n>` is
+     open, so its parent's `all_closed` is false for as long as `<n>` is,
+     and that parent is handled when it comes up in this loop itself or
+     when `cell-converge.yml` fires on it once `<n>` closes.
    - `parent == null` and `sub_issues == []`: nothing was split from
      `<n>` yet (a spec still awaited); skip it.
    - `sub_issues` not empty and `all_closed` false: not the moment; skip
