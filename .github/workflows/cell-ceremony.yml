@@ -15,15 +15,18 @@
 #   on: pull_request: [closed]
 #   permissions: contents: read, issues: write, pull-requests: read
 #   secrets: inherit
-#   pull-requests: read is not in the stub stem-cell wrote ahead of this
-#   file (template/.github/workflows/cell-ceremony.yml.jinja). It is
-#   needed: a PR's merge state is pull-request data, and without the scope
-#   the search qualifier `is:merged` that `cellq merged-count` relies on
-#   matches nothing under GITHUB_TOKEN (probed on harness-test-drive: with
-#   contents: read + issues: write alone, `is:pr` found every PR and
-#   `is:merged` found zero), so no ceremony would ever be due. Until the
-#   stub grants it, the call fails to start, which is visible; it does not
-#   run and silently count zero.
+#   pull-requests: read is needed because a PR's merge state is
+#   pull-request data: without the scope the search qualifier `is:merged`
+#   that `cellq merged-count` relies on matches nothing under GITHUB_TOKEN
+#   (probed on harness-test-drive: with contents: read + issues: write
+#   alone, `is:pr` found every PR and `is:merged` found zero), so no
+#   ceremony would ever be due. A stub that grants less makes the call
+#   fail to start, which is visible in the Actions tab; nothing of this
+#   job runs then, the done states of part (a) included.
+#   A PR from a fork, or one Dependabot authored, runs with a read-only
+#   token whatever the stub grants; cells are single-owner repositories
+#   with Renovate on same-repository branches, so that run fails red
+#   rather than being designed around.
 #
 # Design notes:
 # - `Closes #n` closes the issue on merge but leaves its `state:` label
@@ -33,7 +36,9 @@
 #   may close an issue elsewhere, which this cell's adapter must not touch;
 #   the full-URL and `GH-n` forms GitHub also honours are not read, so an
 #   issue closed that way keeps a stale `state:` label until grooming
-#   routes it.
+#   routes it. GitHub closes by keyword only on a merge into the default
+#   branch, so part (a) runs only for those; a `#n` that names a pull
+#   request is skipped, since `cellq complete` would close it.
 # - The period of each ceremony is read from the cell's thresholds.yml with
 #   `cellq threshold ceremonies.<name>.every_merges`; nothing here is tuned.
 #   A missing file or key fails the step, so the gap shows red in the
@@ -103,9 +108,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           summary=$(mktemp)
+          # Whatever exits this script, the summary so far reaches the run.
+          trap 'cat "$summary" >> "$GITHUB_STEP_SUMMARY"' EXIT
           {
             echo "### cell-ceremony: merged PR #$PR_NUMBER"
             echo ""
@@ -113,14 +122,27 @@ jobs:
 
           # (a) Every issue the merged PR closes becomes state:done. The
           # keywords are GitHub's closing keywords, any case, an optional
-          # colon, then a same-repository #n. Each number once.
-          closed=$(grep -oiE '\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved):?[[:space:]]+#[[:digit:]]+' <<<"$PR_BODY" \
-            | grep -oE '[[:digit:]]+$' | sort -un || true)
-          if [ -z "$closed" ]; then
+          # colon, then a same-repository #n. Each number once. GitHub only
+          # closes by keyword on a merge into the default branch.
+          closed=""
+          if [ "$PR_BASE" = "$DEFAULT_BRANCH" ]; then
+            closed=$(grep -oiE '\b(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved):?[[:space:]]+#[[:digit:]]+' <<<"$PR_BODY" \
+              | grep -oE '[[:digit:]]+$' | sort -un || true)
+          else
+            echo "PR #$PR_NUMBER merged into $PR_BASE, not $DEFAULT_BRANCH: GitHub closes nothing by keyword, so neither does this."
+            echo "- Merged into $PR_BASE, not the default branch: no done states written." >> "$summary"
+          fi
+          if [ -z "$closed" ] && [ "$PR_BASE" = "$DEFAULT_BRANCH" ]; then
             echo "PR #$PR_NUMBER closes no issue by keyword."
             echo "- Closes no issue by keyword." >> "$summary"
           fi
           for n in $closed; do
+            # A number that names a pull request is not an issue to complete.
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY/issues/$n" --jq 'has("pull_request")')" = "true" ]; then
+              echo "#$n is a pull request; not an issue to complete."
+              echo "- #$n is a pull request; skipped" >> "$summary"
+              continue
+            fi
             # Tolerated: an issue already done (completed by hand, or by an
             # earlier PR that closed it too) is not a failure of this merge.
             if out=$(cellq complete "$n"); then
@@ -135,7 +157,6 @@ jobs:
           # The ceremonies need thresholds.yml; checked after (a) so that a
           # cell without the file still gets its done states written.
           if [ ! -f thresholds.yml ]; then
-            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
             echo "::error::thresholds.yml is missing from the repository root; ceremony periods cannot be read (templates/project/thresholds.yml in the harness is the starter)"
             exit 1
           fi
@@ -147,7 +168,6 @@ jobs:
           if (( count == 0 )); then
             echo "::warning::merged-count is zero right after a merge: the search index has not caught up; no ceremony is due at zero"
             echo "- Count is zero (search index lag); no ceremony filed" >> "$summary"
-            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -181,5 +201,3 @@ jobs:
             echo "$name: filed #$n ready ($url)."
             echo "- $name: filed #$n ready, $url" >> "$summary"
           done
-
-          cat "$summary" >> "$GITHUB_STEP_SUMMARY"
