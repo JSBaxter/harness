@@ -138,9 +138,9 @@ the PR body or report cites them.
    ```
    The size bands are: `small`, diff lines below half of that value;
    `medium`, from half up to and including it; `large`, above it. The
-   size-band table carries one more row, the PRs whose `changed_files`
-   exceeds `task.max_files` whatever their band, so that key has a row of
-   its own to cite. Each table carries the row count it averages over, so
+   size-band table carries two more rows, the PRs whose `changed_files`
+   is within `task.max_files` and those over it, whatever their band, so
+   that key has rows of its own to cite. Each table carries the row count it averages over, so
    a mean of one PR is read as such.
 
    ```markdown
@@ -155,6 +155,7 @@ the PR body or report cites them.
    | small (below half) | | | | |
    | medium (half to the limit) | | | | |
    | large (above the limit) | | | | |
+   | within task.max_files (any band) | | | | |
    | over task.max_files (any band) | | | | |
 
    ### Review rounds and rework by route
@@ -196,8 +197,10 @@ the PR body or report cites them.
    | Breaks (`source:cell:` contract breaks) | | <issue numbers, with the deciding line> |
    ```
 
-   `PRs that reached review.max_rounds` compares each PR's rounds with
-   `cellq threshold review.max_rounds`. Under the tables, one line per
+   `PRs that reached review.max_rounds` counts PRs on which any single
+   gate run's stated rounds reached `cellq threshold review.max_rounds`;
+   the gate enforces R9 per run, so the sum across runs is not what is
+   compared. Under the tables, one line per
    merged PR with the row it fed (number, band, files, route, source,
    runs, rounds, rework, surface, model), so every cell of every table can be
    checked against the PR it came from.
@@ -206,14 +209,18 @@ the PR body or report cites them.
    (the file, not memory) and, for each, the rows of the report that are
    evidence about it. A key is changed only when a row compares two sides
    of what the key bounds and the side the current value permits is the
-   worse one, and then by one step at a time; never on a hunch, never two
-   keys from one row, and never a key the report has no row for. The
-   evidence each key can have:
+   worse one, and then by one step at a time; never on a hunch, never a
+   key the report has no row for, and when two keys share a row (the two
+   `route.spec_if` keys; `edges.<cell>` and `edges.default`), only the
+   one the evidence names moves in one retro: the re-route items say
+   whether files or sessions tripped R3, and a cell's own row moves its
+   own weight while `edges.default` moves only on the rows of sources
+   that have no key of their own. The evidence each key can have:
 
    | Key | Evidence row | Direction |
    |---|---|---|
    | `task.max_diff_lines` | size band table, the three band rows | lower when `medium` has more rounds or rework per PR than `small` by a margin the PR counts support; raise when `large` PRs merged with no more rounds or rework than `medium` and no re-route named the limit |
-   | `task.max_files` | size band table, the `over task.max_files` row against the `small` row | lower when PRs within the file limit still show more rounds or rework per PR than `small` and a re-route named the file count; raise when PRs over the limit merged with no more rounds or rework than `small` and no re-route named it |
+   | `task.max_files` | size band table, the `within` and `over task.max_files` rows | lower when the `within` row shows more rounds or rework per PR than the `small` band row, so that file count rather than line count is what review cost tracks; raise when the `over` row merged with no more rounds or rework than the `within` row and no re-route named the file count |
    | `route.spec_if.files_over`, `route.spec_if.sessions_over` | route table and the re-route items | lower when `small`-route PRs re-routed through R3 for files or a second session, or needed more rounds than `spec`-route PRs; raise when `spec`-route work of few files merged in one round |
    | `review.max_rounds` | gate load | raise when PRs reached the limit and merged with `needs-human` after a fix James made by hand; lower when every PR merged under it with rounds to spare |
    | `edges.<cell>`, `edges.default` | source table and the breaks row | lower a cell's weight when its requests cost more rounds or rework per PR than `own` or caused breaks; raise it when its requests merged as cleanly as `own` |

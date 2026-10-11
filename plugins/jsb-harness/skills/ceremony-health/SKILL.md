@@ -59,9 +59,10 @@ those lines into the report.
    Evidence must come from merged code, not from the branch this session
    happens to be on. Fetch, put the default branch in its own worktree
    (`git fetch origin`, `git worktree add --detach <dir> origin/<default>`;
-   in an Actions run the checkout already is the default branch; confirm
-   `git rev-parse HEAD` equals `git rev-parse origin/<default>`) and read
-   CLAUDE.md there for the test command. Every test and command below runs
+   in an Actions run the checkout is usually the default branch already:
+   when `git rev-parse HEAD` equals `git rev-parse origin/<default>` work
+   in place, otherwise add the worktree as above) and read CLAUDE.md
+   there for the test command. Every test and command below runs
    in that worktree, and the report names the commit it checked (`git
    rev-parse --short origin/<default>`).
 
@@ -114,16 +115,17 @@ those lines into the report.
      names it (`gh issue list --state open --search "Gap: in:title" --json
      number,title,body`, read each; a gap names the statement when its
      title or body quotes it or the criterion it was cut from); and the
-     gate is green on the default branch. The gate is green when the
-     combined status of the default branch's head (`gh api
-     repos/<o>/<r>/commits/<sha>/status`, state `success`, or no statuses
-     and no failed check runs under `.../check-runs`) is not failing; when
-     the head carries no statuses at all because the gate stamps PR heads,
-     read the `claude-review` status on the head commit of the most
-     recently merged PR instead (`gh pr list --state merged --json
-     headRefOid,mergedAt`, the newest `mergedAt`, then
-     `.../commits/<sha>/statuses`). Read the gate
-     once, not per statement; it is the same answer for every statement.
+     gate is green on the default branch. The gate stamps PR heads, not
+     merge commits, so read it in one place: the `claude-review` status on
+     the head commit of the most recently merged PR (`gh pr list --state
+     merged --json headRefOid,mergedAt`, the newest `mergedAt`, then `gh
+     api repos/<o>/<r>/commits/<sha>/statuses`, the newest entry with
+     that context). Green is that status `success` and no failed check
+     run on the default branch's head (`.../commits/<head>/check-runs`);
+     red is anything else. A PR head with no `claude-review` status at all
+     (merged before the gate existed, or the gate never ran) is green for
+     this purpose and the report says so. Read the gate once, not per
+     statement; it is the same answer for every statement.
    - **Unmet**: everything else: the test is missing (a named test that no
      file defines, or no test asserts an unnamed statement), failing, or
      deleted (`git log --diff-filter=D` finds the file, or `git log
@@ -161,14 +163,15 @@ those lines into the report.
    cellq parent <n>
    ```
    The delta is shipped but unfolded when the linked issue is closed as
-   completed (`gh issue view <n> --json state,stateReason,labels`: closed,
-   not `not_planned`, label `state:done`), its `sub_issues` is not empty
-   and `all_closed` is true, and the delta is still in Pending changes.
-   (Open parents are grooming's business, step 8 there; a parent closed as
-   not planned, `state:dropped`, is an abandoned delta, listed in the
-   report for James and left in place; a closed parent with no sub-issues
-   was never split, so nothing was built to check: listed as "closed,
-   never split".) Before folding, apply `converge`'s own guard as grooming
+   completed (`gh issue view <n> --json state,stateReason,labels`: closed
+   with `stateReason` `COMPLETED`, whatever `state:` label it still
+   carries, since a parent James closed by hand was never `cellq
+   complete`d), its `sub_issues` is not empty and `all_closed` is true,
+   and the delta is still in Pending changes. (Open parents are grooming's
+   business, step 8 there; a parent closed as not planned, or labelled
+   `state:dropped`, is an abandoned delta, listed in the report for James
+   and left in place; a closed parent with no sub-issues was never split,
+   so nothing was built to check: listed as "closed, never split".) Before folding, apply `converge`'s own guard as grooming
    step 8 does: a fold PR for this parent that is open, or merged, labelled
    `proposal` and naming the parent (`gh pr list --state open --label
    proposal --search "#<n>"`, then `--state merged`), or an open gap issue
@@ -176,10 +179,14 @@ those lines into the report.
    #<p> pending" or "gap #<g> open" and fold nothing. Otherwise run
    `converge` steps 2 and 3 (the skill in
    `plugins/jsb-harness/skills/converge/SKILL.md`; from source in a cloud
-   session) with one difference: the parent is already closed, so
-   `converge` step 1's gate on it is replaced by the checks above, and the
-   fold goes into this spec's proposal PR (step 6) rather than a PR of its
-   own, so that one PR per spec carries everything health proposes for it.
+   session) with two differences: the parent is already closed, so
+   `converge` step 1's gate on it is replaced by the checks above, and
+   from step 3 only the spec edits are taken: the fold goes into this
+   spec's proposal PR (step 6) rather than a PR of its own, so that one PR
+   per spec carries everything health proposes for it, and `converge`'s
+   closing `cellq state <n> in-review` is never run, because any state
+   set on a closed issue reopens it (the adapter contract) and nothing
+   would close it again.
    Evaluate every criterion exactly as `converge` step 2 says (one `PASS`
    or `FAIL` line each, real evidence, nothing partial). All pass: keep
    the fold edits from `converge` step 3 for the spec branch of step 6,
@@ -204,17 +211,20 @@ those lines into the report.
      Behavior is now empty and James should decide whether the spec goes.
    - **Unmet, test exists under another name** (the statement names a test
      that is missing, and step 2 found the test or tests that assert it,
-     all passing, with no open gap and the gate green): on the spec
-     branch, replace the name after `— test:` with the names found; no
-     issue. The statement stays unmet in the report, with the PR as its
-     action, until James merges the reference.
+     all passing): on the spec branch, replace the name after `— test:`
+     with the names found; no issue for the missing name. The statement
+     stays unmet in the report, with the PR as its action, until James
+     merges the reference. An open gap or a red gate on top of that is a
+     reason of its own, handled by the next bullet as well.
    - **Met but unnamed** (an unnamed statement whose tests step 2 found and
      ran): on the spec branch, append `— test: <names>` to the statement,
      so the next health run finds the tests by name; no issue, and the
      statement counts as met.
    - **Unmet, otherwise** (no test, a failing test, a deleted test with no
-     test under another name, an open gap, or a red gate): one issue per
-     statement, unless an open
+     test under another name, an open gap, or a red gate; a renamed test
+     with a gap or a red gate gets the reference edit above and appears
+     here only for the gap or the gate): one issue per statement, unless
+     an open
      issue with the same title already exists (`gh issue list --state open
      --search "Unmet: in:title" --json number,title`, compare titles word
      for word). Write a body file naming the spec and its line, the
@@ -316,9 +326,10 @@ those lines into the report.
 
    The verdict counts unmet statements only; dead statements are proposals
    and shipped-but-unfolded deltas are folds, neither a failed
-   requirement. "requirements met" needs every statement in every spec in
-   scope met; the parenthesis appears only when a draft spec in progress
-   contributes to the count. Every PR, issue and statement the ceremony touched appears in
+   requirement. "requirements met" is the verdict when that count is zero
+   across every spec in scope, dead statements notwithstanding; the
+   parenthesis appears only when a draft spec in progress contributes to
+   the count. Every PR, issue and statement the ceremony touched appears in
    the report, so James can check each one. Then close the ceremony issue:
    ```bash
    cellq complete <ceremony issue>
