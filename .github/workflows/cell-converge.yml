@@ -68,7 +68,8 @@
 #   as cell-scope does: the cost is nothing and a future `issue_comment`
 #   trigger would need it.
 # - Skills and `cellq` reach the runner through the setup-cell composite
-#   action, as in cell-scope.
+#   action from a harness checkout pinned at job.workflow_sha, as in
+#   cell-scope (ADR 0010).
 # - Tokens. The skill's success path pushes a fold branch and opens a
 #   proposal PR, which the caller's scopes (contents: read, no
 #   pull-requests) would not allow with the workflow token. It works
@@ -115,11 +116,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Same `@main` second hop as cell-scope, with the same accepted
-      # exposure (see the comment there and ADR 0006 decision 3); #66 pins
-      # it at job.workflow_sha for every reusable workflow at once.
+      # Skills and cellq are delivered from the harness checked out at this
+      # workflow file's own commit (job.workflow_sha), as cell-scope does:
+      # they come from the pinned commit the caller stub names, not from
+      # `main` (ADR 0010). `uses: ./...` resolves against the caller's
+      # workspace, so the checkout lands under it and is removed once
+      # delivery is done, before the session that may commit.
+      - name: Check out the harness at this workflow's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JSBaxter/harness
+          ref: ${{ job.workflow_sha }}
+          path: .harness
+
       - name: Deliver skills and cellq
-        uses: JSBaxter/harness/.github/actions/setup-cell@main
+        uses: ./.harness/.github/actions/setup-cell
+
+      - name: Remove the harness checkout
+        run: rm -rf .harness
 
       # Outputs: `parent` is the parent issue number, or the word `null`
       # when the closed issue has none; `all_closed` is `true` only when
