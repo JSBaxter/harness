@@ -33,37 +33,55 @@ absent).
    The output is `{parent, sub_issues: [{number, closed}], all_closed}`.
    If `all_closed` is not `true`, stop and report which sub-issues are
    still open; touch nothing, because this is simply not the moment (the
-   trigger fired early, or someone ran the skill by hand). A non-zero exit
-   is an environment or usage failure: report the stderr line and stop.
-   If the parent itself is closed, stop and say so: it has already been
-   folded or dropped.
+   trigger fired early, or someone ran the skill by hand). If `sub_issues`
+   is empty, stop and say so: nothing was split from this parent, so
+   nothing has been built to check, whatever `all_closed` says. A non-zero
+   exit is an environment or usage failure: report the stderr line and
+   stop. If the parent itself is closed, stop and say so: it has already
+   been folded or dropped.
 
    Then find the delta. Read the parent (its definition of done names the
    spec: "The spec is written to `specs/<area>.md`") and search every spec
-   for the entry under `## Pending changes` whose `Linked issue` line is
-   `#<n>`:
+   for what links `#<n>` under `## Pending changes`. It has one of two
+   shapes:
+   - **A delta entry**: a `### ` heading under `## Pending changes` whose
+     `Linked issue` field is `#<n>`. Its acceptance criteria are the
+     entry's `Acceptance criteria` field, and its name is the heading
+     without the date.
+   - **A new spec**: `## Pending changes` has no `### ` entry (it says the
+     spec is new) and carries a bare `Linked issue: #<n>` line. The whole
+     spec is the delta: its criteria are the top-level `## Acceptance
+     criteria`, its name is the spec's title, and its Behavior is already
+     written.
    ```bash
-   grep -ln 'Linked issue:.*#<n>\b' specs/*.md
+   grep -lE 'Linked issues?\*?\*?:.*#<n>([^0-9]|$)' specs/*.md
    awk -v n='<n>' '
-     /^## /        { pc = ($0 == "## Pending changes") }
-     pc && /^### / { if (hit) exit; name = $0; body = ""; hit = 0; next }
+     /^## /        { if (hit) print name body; pc = ($0 == "## Pending changes"); name = ""; hit = 0 }
+     pc && /^### / { if (hit) print name body; name = $0; body = ""; hit = 0; next }
      pc && name    { body = body "\n" $0;
-                     if ($0 ~ "^(#+ |\\*\\*)?Linked issue.*#" n "([^0-9]|$)") hit = 1 }
+                     if ($0 ~ "^(#+ |\\*\\*)?Linked issues?.*#" n "([^0-9]|$)") hit = 1 }
      END           { if (hit) print name body }' specs/<area>.md
+   sed -n '/^## Pending changes/,/^## /p' specs/<area>.md | grep -E '^Linked issues?:.*#<n>([^0-9]|$)'
    ```
-   The delta's name is the `### ` heading without its date. If no entry in
-   any spec links `#<n>`, or the entry has no `Acceptance criteria` field,
-   the spec is not foldable as written: record that on the parent through
-   the adapter and stop, so the issue says why nothing happened and James
-   or the grooming ceremony can see what to fix:
+   The awk prints every delta entry that links `#<n>`, in order; the
+   `sed | grep` finds the new-spec line. If more than one entry links
+   `#<n>` (a spec PR carried several deltas; the spec's open question on
+   this defaults to one run per parent), treat their criteria as one list:
+   everything below folds all of them in one PR when every criterion
+   passes, and folds none when any fails. A sub-spec whose header says it
+   folds into another spec and is then deleted (the shape `split-spec`
+   gives a change-scoped sub-spec) is folded as its header says: its
+   shipped Behavior goes into the spec it names, and the file is deleted,
+   in the same PR.
+
+   If nothing in any spec links `#<n>`, or the delta has no acceptance
+   criteria, the spec is not foldable as written: record that on the
+   parent through the adapter and stop, so the issue says why nothing
+   happened and James or the grooming ceremony can see what to fix:
    ```bash
    cellq state <n> blocked --reason "converge: no delta in specs/ links #<n>"
    cellq state <n> blocked --reason "converge: delta <name> in specs/<area>.md has no Acceptance criteria"
    ```
-   If more than one entry links `#<n>` (a spec PR carried several deltas;
-   the spec's open question on this defaults to one run per parent), treat
-   their criteria as one list: everything below folds all of them in one
-   PR when every criterion passes, and folds none when any fails.
 
 2. **Evaluate each criterion on a fresh checkout of the default branch.**
    Evidence must come from merged code, not from the branch this session
@@ -95,11 +113,14 @@ absent).
      partial. A criterion you cannot exercise (the resource it needs is not
      reachable from this session, the command it names does not exist) is
      a `FAIL` whose evidence says what could not be run and why.
-   - A criterion asserted by no test, where the spec or the parent's
-     definition of done expects one, is a `FAIL` with the search that
-     found nothing as evidence (`grep -rn '<name>' tests/` returned
-     nothing). Writing the missing test is a fix, and fixes are not this
-     skill's work (step 5).
+   - The kind of evidence follows the kind of criterion. A criterion about
+     behaviour (something runs, returns, exits, refuses) passes only on a
+     test's result or a command's output; one about content (a file says,
+     contains, names something) passes on the file and line that shows it.
+     A behaviour criterion with no test that asserts it and no command
+     that exercises it is a `FAIL` with the search that found nothing as
+     evidence (`grep -rn '<name>' tests/` returned nothing). Writing the
+     missing test is a fix, and fixes are not this skill's work (step 5).
    - Quote real output. Never report a run you did not do, and never run a
      test command from another repository because CLAUDE.md names a
      placeholder; say that the placeholder is there, and let that
@@ -112,16 +133,23 @@ absent).
    the worktree from step 2), edit the spec file and nothing else:
    - Move the delta's **What changes** content into `## Behavior`, as
      statements, under the heading of the area each one belongs to (add a
-     heading only when none fits). Every statement ends by naming the test
-     from its evidence line:
+     heading only when none fits). Cut one statement per acceptance
+     criterion, worded from What changes, so that each statement has one
+     evidence line, and end it by naming what that line named:
      ```markdown
      - <the statement> — test: <test name>
      ```
-     Where the evidence was a command rather than a named test, the
-     command is the test, because it is what the next reader re-runs:
-     `— test: cellq threshold no.such.key exits non-zero`. Where it was a
-     file and line, name the test that covers that file; if none does, the
-     criterion should not have passed, so go back to step 2.
+     The thing after `test:` is what the next reader re-runs or re-reads
+     to check the statement: the test name; the command, when the evidence
+     was a command (`— test: cellq threshold no.such.key exits non-zero`);
+     or the file and line, when the criterion was about content
+     (`— test: README.md:12`). What-changes content that no criterion
+     covers has no evidence and does not enter Behavior; list it in the PR
+     body under `## Unverified` for James to decide.
+   - For a new spec, Behavior is already written: add the `— test:` ending
+     to each statement a criterion covers, change `Status: draft` to
+     `Status: active`, and leave the top-level `## Acceptance criteria`
+     where it is.
    - Delete from `## Behavior` any statement **What is removed** names.
      **What stays** describes statements that are already there; leave
      them as they are.
@@ -163,6 +191,9 @@ absent).
    ```bash
    cellq state <n> in-review
    ```
+   If James closes the fold PR without merging, the parent stays in
+   in-review with no PR; grooming's scan for a parent whose sub-issues
+   are all closed and no fold PR is open brings it back here.
 
 4. **Any fail: open a gap issue, change nothing else.** No branch, no
    commit, no PR; the delta stays in Pending changes and the parent keeps
@@ -181,7 +212,16 @@ absent).
    ## Audit
    <the three questions from step 6>
    ```
-   Then file it and make it a sub-issue of the parent:
+   Before filing, look for an earlier gap with the same title
+   (`gh issue list --state all --search '"Gap: <criterion>" in:title'
+   --json number,state,labels`). One that is open already is this gap:
+   link it if it is not yet a sub-issue and file nothing new. One closed
+   with `state:dropped` means James has said the criterion is wrong; do
+   not file it again, and instead send the spec back for editing:
+   ```bash
+   cellq state <n> blocked --reason "converge: criterion dropped in #<gap>; the delta in specs/<area>.md needs editing"
+   ```
+   Otherwise file it and make it a sub-issue of the parent:
    ```bash
    cellq idea "Gap: <criterion>" --body <file> --source agent
    cellq link <n> <gap>
@@ -216,6 +256,10 @@ absent).
      ```bash
      gh pr comment <pr> --body-file <file>
      ```
+     Without `gh`, the same comment goes through the REST endpoint
+     `POST repos/<o>/<r>/issues/<pr>/comments` (a PR is an issue there), or
+     the GitHub MCP comment tool. A PR comment is not issue state, so no
+     adapter verb is needed.
    - On a gap issue: they are already in the body under `## Audit` (step
      4), written through the adapter at creation, which keeps the adapter
      the issue's only writer; the thread under the issue is where James
