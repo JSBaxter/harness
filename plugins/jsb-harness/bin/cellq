@@ -620,11 +620,11 @@ def parent_line(body):
 
 
 def parent_of(gh, issue):
-    """The parent issue number, or None. The issue JSON's parent_issue_url
-    is the sub-issue parent as the listing already carries it; when that
-    key is absent, GET /issues/{n}/parent asks for it. GitHub answers 404
-    both for an issue with no parent and when the endpoint itself is not
-    served (a proxy), so either way the `Parent: #n` body line is the
+    """The parent issue number, or None. Issue JSON carries parent_issue_url
+    only when the issue has a sub-issue parent, so that answers without a
+    call; without the key, GET /issues/{n}/parent is asked. GitHub answers
+    404 both for an issue with no parent and when the endpoint itself is
+    not served (a proxy), so either way the `Parent: #n` body line is the
     fallback, as it is for `link`."""
     if "parent_issue_url" in issue:
         number = issue_number(issue["parent_issue_url"])

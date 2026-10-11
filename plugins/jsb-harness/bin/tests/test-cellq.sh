@@ -330,7 +330,8 @@ else
   B=$(cq idea "cellq test ready B" | jq -r .number); created+=("$B")
   cq scope "$A" --dod "$tmp/dod.md" --route small --priority 5 >/dev/null
   cq depend "$A" "$B" >/dev/null
-  has "$(ready)" "$A" && bad "ready lists #$A while #$B is open" || ok
+  out=$(ready)                                                             # a crash here aborts the run, not a silent pass
+  has "$out" "$A" && bad "ready lists #$A while #$B is open" || ok
   cq complete "$B" >/dev/null
   out=$(ready)
   has "$out" "$A" && ok || bad "ready lacks #$A after #$B closed"
