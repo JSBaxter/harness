@@ -14,7 +14,8 @@ Create or update a living specification under `specs/`.
 - One spec per capability/feature area, named `specs/<area>.md`. Sub-specs
   derived by /split-spec live alongside with a `Derived from:` line.
 - A spec change for existing behavior is written as a **delta**: what changes,
-  what stays, what's removed — then merged into the spec body once implemented.
+  what stays, what's removed — folded into the spec body by `/converge` once
+  the implementing work merges (step 4), never by hand.
 - Acceptance criteria are written to be executable by an agent with no other
   context: concrete inputs, observable outputs, testable statements.
 
@@ -109,6 +110,15 @@ residual-stream-viz first iteration).
    /split-spec if the spec looks too big for one agent to implement in one PR.
    Neither is mandatory — /plan is skipped when the approach is forced, and
    /split-spec reports "small enough as-is" when it is.
-4. When implementation of a pending change merges, fold the delta into the
-   Behavior section and delete it from Pending changes (do this when asked, or
-   when you notice a merged PR references the delta).
+4. Do not fold a delta by hand, even when asked or when a merged PR
+   references it. Folding is `/converge`'s job: when the implementing work
+   merges and the last task cut from the delta closes, the cell-converge
+   workflow (or the grooming ceremony) runs it on the parent issue the
+   delta's `Linked issue` names. From a fresh context it checks every
+   criterion against the default branch and folds the delta through a
+   `proposal` PR: what the software does goes into Behavior, each statement
+   naming its test; documentation, process and convention go to Constraints,
+   Non-goals, the README or an ADR. A failing criterion opens a gap issue
+   instead and the delta stays in Pending changes. A `route:small` issue
+   has no delta: its PR edits the Behavior statement it alters directly, in
+   the same branch, naming the test, per `/implement` step 4.
