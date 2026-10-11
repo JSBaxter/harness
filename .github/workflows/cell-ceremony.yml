@@ -48,7 +48,13 @@
 #   previous one, and a ceremony that falls on the skipped count waits for
 #   its next period. Known; measure on the first cell before adding a wait.
 #   A count of zero (a new cell's first merge read before the index has it)
-#   is due for nothing, since every period divides zero.
+#   is due for nothing, since every period divides zero. Two runs that
+#   read the same lagging count and both pass the open-title check before
+#   either files would file a ceremony twice; the stub carries no
+#   concurrency group, and that needs a period hit, two merges seconds
+#   apart and the lag together, so it is noted rather than guarded.
+# - A missing thresholds.yml fails the step only after part (a), so the
+#   done states are written whatever the state of the ceremonies.
 # - The github context (event_name, event.pull_request.*) is the caller's,
 #   so the job guard below works unchanged via workflow_call. The caller's
 #   `pull_request: [closed]` also fires for a close without a merge, which
@@ -89,11 +95,6 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          if [ ! -f thresholds.yml ]; then
-            echo "::error::thresholds.yml is missing from the repository root; ceremony periods cannot be read (templates/project/thresholds.yml in the harness is the starter)"
-            exit 1
-          fi
-
           summary=$(mktemp)
           {
             echo "### cell-ceremony: merged PR #$PR_NUMBER"
@@ -120,6 +121,14 @@ jobs:
               echo "- #$n: cellq complete failed (see the log)" >> "$summary"
             fi
           done
+
+          # The ceremonies need thresholds.yml; checked after (a) so that a
+          # cell without the file still gets its done states written.
+          if [ ! -f thresholds.yml ]; then
+            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::thresholds.yml is missing from the repository root; ceremony periods cannot be read (templates/project/thresholds.yml in the harness is the starter)"
+            exit 1
+          fi
 
           # (b) The cell's merged-PR count, from the search endpoint.
           count=$(cellq merged-count | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])')

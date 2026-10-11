@@ -16,6 +16,9 @@
 #   concurrency: group cell-converge-${{ github.event.issue.number }} with
 #     cancel-in-progress: false, so a cancel never kills a session between
 #     cellq's label write and its comment write.
+#   The stub's group is per closed issue, so it does not keep two closes of
+#   sibling tasks apart; the job below adds a repository-wide group for that
+#   (see the design note on siblings).
 #
 # What does NOT start this: a sub-issue closed with GITHUB_TOKEN from inside
 # another workflow. GitHub never chains events created with the Actions
@@ -43,6 +46,19 @@
 #   open sub-issue or an empty list), so the session is only spent when it
 #   will act. The skill, not this file, decides about an already-open fold
 #   PR, a closed parent and the rest.
+# - Siblings. One merged PR whose body closes the parent's last two tasks,
+#   or James closing two in the UI inside a minute, fires two `issues:
+#   closed` events, and both Find parent steps would see every sub-issue
+#   closed. The job's concurrency group (one converge at a time per
+#   repository, never cancelled) runs them one after the other, and the
+#   second then finds what the first did: on the fold path the skill has
+#   set the parent `state:in-review` and its step 1 stops on the open fold
+#   PR; on the gap path the skill has linked the gap issue as a sub-issue
+#   of the parent, so the second run's lookup sees an open sub-issue and
+#   skips without a session. GitHub keeps at most one pending run per
+#   group and cancels the older pending one when a third arrives; three
+#   closes of one parent inside a run are fine (any one converges it), and
+#   a dropped run for a different parent is what grooming step 8 catches.
 # - A run that fails leaves the parent in its prior state; nothing here
 #   retries or marks it. Grooming step 8 routes it on the next period, so
 #   failure is safe, not silent.
@@ -59,8 +75,9 @@
 #   because claude-code-action exchanges the OIDC token (id-token: write)
 #   for a Claude GitHub App installation token and sets GH_TOKEN and
 #   GITHUB_TOKEN to it in the process that spawns the session
-#   (src/entrypoints/run.ts; git-config.ts gives git a credential helper
-#   that reads GH_TOKEN). So inside the session `git push`, `gh pr create`
+#   (src/entrypoints/run.ts), and in agent mode git-config.ts drops the
+#   checkout's auth header and sets the origin URL with that token. So
+#   inside the session `git push`, `gh pr create`
 #   and `cellq` all run on the App token, with the App's own scopes; the
 #   step's `GH_TOKEN: github.token` below reaches only the action's other
 #   composite steps, as in cell-scope. Two consequences: the fold PR and
@@ -83,6 +100,12 @@ jobs:
       && !github.event.issue.pull_request
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # One converge at a time per repository, queued, never cancelled; see
+    # the siblings note in the header. A constant group is per repository
+    # already, since concurrency groups are scoped to the repository.
+    concurrency:
+      group: cell-converge
+      cancel-in-progress: false
     permissions:
       contents: read
       issues: write
