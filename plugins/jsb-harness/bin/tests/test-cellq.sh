@@ -30,7 +30,11 @@ expect_rc() {
 
 cleanup() {
   for n in "${created[@]:-}"; do
-    [ -n "$n" ] && "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null 2>&1 || true
+    [ -n "$n" ] || continue
+    # one retry: a burst of creates can trip GitHub's secondary rate limit
+    "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null 2>&1 \
+      || { sleep 5; "$cellq" state "$n" dropped --repo "$CELLQ_TEST_REPO" >/dev/null; } \
+      || echo "WARN: could not close fixture issue #$n in $CELLQ_TEST_REPO"
   done
   rm -rf "$tmp"
 }
@@ -147,6 +151,117 @@ else
   expect_out "{\"parent\": $p, \"child\": $c}" link "$p" "$c" --repo "$R"
   api "issues/$p/sub_issues" --jq '.[].number' | grep -x "$c" >/dev/null && ok || bad "#$c not in sub-issues of #$p"
   expect_rc 1 link 999999 "$c" --repo "$R"                                 # bad parent fails
+
+  # one_label <n> <group> <value>: exactly one <group>: label and it is the one given
+  one_label() {
+    local got; got=$(labels_of "$1" | grep "^$2:" || true)
+    if [ "$got" = "$2:$3" ]; then ok; else bad "issue #$1 $2 labels [$got], wanted [$2:$3]"; fi
+  }
+  body_of() { api "issues/$1" --jq '.body'; }
+
+  echo "== online: scope"
+  s=$(cq idea "cellq test scope" | jq -r .number); created+=("$s")
+  printf '## Definition of done\n\nInputs: x\n\nAcceptance:\n- `cellq x` prints y\n' >"$tmp/dod.md"
+  expect_rc 1 scope "$s" --dod "$tmp/dod.md" --route weird --priority 2 --repo "$R"   # bad route
+  expect_rc 1 scope "$s" --dod "$tmp/dod.md" --route small --priority 9 --repo "$R"   # priority out of range
+  expect_rc 1 scope "$s" --dod "$tmp/nope.md" --route small --priority 2 --repo "$R"  # missing dod file
+  printf '## Definition of done\n\n' >"$tmp/bare.md"
+  expect_rc 1 scope "$s" --dod "$tmp/bare.md" --route small --priority 2 --repo "$R"  # heading only
+  one_state "$s" new                                                                   # nothing written by the failures
+  labels_of "$s" | grep -E '^(route|priority):' >/dev/null && bad "failed scope wrote labels" || ok
+  [ "$(body_of "$s")" = "" ] && ok || bad "failed scope wrote a body: $(body_of "$s")"
+  expect_out "{\"number\": $s, \"route\": \"small\", \"priority\": 2, \"state\": \"ready\"}" \
+    scope "$s" --dod "$tmp/dod.md" --route small --priority 2 --repo "$R"
+  one_label "$s" route small; one_label "$s" priority 2; one_state "$s" ready
+  body_of "$s" | grep -xF '## Definition of done' >/dev/null && ok || bad "scope did not write the heading"
+  body_of "$s" | grep -F -- '- `cellq x` prints y' >/dev/null && ok || bad "scope did not write the dod text"
+  # re-scope: replaces the section (one heading), moves route and priority, blocks with a reason
+  printf '## Definition of done\n\nInputs: z\n' >"$tmp/dod2.md"
+  expect_out "{\"number\": $s, \"route\": \"spec\", \"priority\": 4, \"state\": \"blocked\"}" \
+    scope "$s" --dod "$tmp/dod2.md" --route spec --priority 4 --blocked "awaiting spec PR" --repo "$R"
+  one_label "$s" route spec; one_label "$s" priority 4; one_state "$s" blocked
+  [ "$(body_of "$s" | grep -cxF '## Definition of done')" -eq 1 ] && ok || bad "re-scope left more than one dod heading"
+  body_of "$s" | grep -F 'Inputs: z' >/dev/null && ok || bad "re-scope did not replace the dod text"
+  body_of "$s" | grep -F 'Inputs: x' >/dev/null && bad "re-scope kept the old dod text" || ok
+  api "issues/$s/comments" --jq '.[].body' | grep -xF 'state: blocked — awaiting spec PR' >/dev/null && ok || bad "blocked reason comment missing"
+
+  echo "== online: claim + complete"
+  k=$(cq idea "cellq test claim" | jq -r .number); created+=("$k")
+  expect_rc 1 claim "$k" --repo "$R"                                       # state:new refuses
+  one_state "$k" new
+  cq state "$k" ready >/dev/null
+  out=$(CLAUDE_SESSION_ID=cellq-test-session cq claim "$k")
+  [ "$(jq -r .number <<<"$out")" = "$k" ] && [ "$(jq -r .claimed_by <<<"$out")" = "cellq-test-session" ] \
+    && jq -r .claimed_at <<<"$out" | grep -Ex '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' >/dev/null \
+    && ok || bad "claim output: $out"
+  one_state "$k" in-progress
+  api "issues/$k/comments" --jq '.[].body' | grep -E '^claimed by cellq-test-session at [0-9]{4}-' >/dev/null && ok || bad "claim comment missing"
+  expect_rc 1 claim "$k" --repo "$R"                                       # in-progress refuses too
+  expect_out "{\"number\": $k, \"state\": \"done\"}" complete "$k" --repo "$R"
+  one_state "$k" done; issue_is "$k" closed completed
+  # an explicit --session wins over the environment; an empty one is refused
+  cq state "$k" ready >/dev/null
+  expect_rc 1 claim "$k" --session "" --repo "$R"
+  one_state "$k" ready
+  out=$(CLAUDE_SESSION_ID=from-env cq claim "$k" --session explicit-ref)
+  [ "$(jq -r .claimed_by <<<"$out")" = "explicit-ref" ] && ok || bad "claim --session output: $out"
+  api "issues/$k/comments" --jq '.[].body' | grep -E '^claimed by explicit-ref at ' >/dev/null && ok || bad "claim --session comment missing"
+
+  echo "== online: depend"
+  d=$(cq idea "cellq test depend" | jq -r .number); created+=("$d")
+  expect_rc 1 depend "$d" "$d" --repo "$R"                                 # self
+  expect_rc 1 depend "$d" 999999 --repo "$R"                               # missing target
+  pr=$(api "pulls?state=all&per_page=1" --jq '.[0].number // empty')
+  [ -n "$pr" ] && expect_rc 1 depend "$d" "$pr" --repo "$R"                 # a pull request is not an issue
+  expect_out "{\"number\": $d, \"depends_on\": [$s]}" depend "$d" "$s" --repo "$R"
+  expect_out "{\"number\": $d, \"depends_on\": [$s]}" depend "$d" "$s" --repo "$R"   # idempotent
+  [ "$(body_of "$d" | grep -c "^Depends on:")" -eq 1 ] && ok || bad "depend left more than one line"
+  [ "$(body_of "$d" | grep -o "#$s\b" | wc -l)" -eq 1 ] && ok || bad "depend twice left more than one #$s"
+  expect_out "{\"number\": $d, \"depends_on\": [$s, $k]}" depend "$d" "$k" --repo "$R"
+  body_of "$d" | grep -xF "Depends on: #$s, #$k" >/dev/null && ok || bad "depend line: $(body_of "$d" | grep '^Depends on:')"
+  # the line sits after the definition-of-done section when one is written later
+  cq scope "$d" --dod "$tmp/dod.md" --route small --priority 1 >/dev/null
+  body_of "$d" | tr -d '\r' | awk '/^## Definition of done$/{f=1} /^Depends on:/{if(f) print "after"}' | grep -x after >/dev/null \
+    && ok || bad "Depends on line is not after the dod section"
+
+  echo "== online: merged-count"
+  out=$(cq merged-count)
+  grep -Ex '\{"count": [0-9]+\}' <<<"$out" >/dev/null && ok || bad "merged-count output: $out"
+
+  echo "== online: request-feature (self-request to $R)"
+  printf 'input: `cellq x`\nexpected: `{"y": 1}`\n' >"$tmp/example.md"
+  printf 'https://github.com/%s/blob/main/specs/area.md\n' "$R" >"$tmp/why.md"
+  expect_rc 1 request-feature "x" --to not-a-repo --kind api --example "$tmp/example.md" --why "$tmp/why.md" --repo "$R"
+  expect_rc 1 request-feature "x" --to "$R" --kind api --example "$tmp/example.md" --why "$tmp/why.md" --priority-hint 7 --repo "$R"
+  expect_rc 2 request-feature "x" --to "$R" --kind api --example "$tmp/example.md" --repo "$R"   # --why is required
+  out=$(cq request-feature "cellq test request" --to "$R" --kind api --example "$tmp/example.md" --why "$tmp/why.md" --priority-hint 2)
+  rn=$(jq -r .remote.number <<<"$out"); mn=$(jq -r .mirror.number <<<"$out"); created+=("$rn" "$mn")
+  [ "$rn" -gt 0 ] && [ "$mn" -gt "$rn" ] \
+    && [ "$(jq -r .remote.url <<<"$out")" = "https://github.com/$R/issues/$rn" ] \
+    && [ "$(jq -r .mirror.url <<<"$out")" = "https://github.com/$R/issues/$mn" ] && ok || bad "request-feature output: $out"
+  one_state "$rn" new; one_label "$rn" source "cell:${R#*/}"
+  one_state "$mn" blocked; one_label "$mn" source own
+  [ "$(api "issues/$rn" --jq .title)" = "cellq test request" ] && ok || bad "remote title"
+  [ "$(api "issues/$mn" --jq .title)" = "Request to $R: cellq test request" ] && ok || bad "mirror title"
+  for h in 'Requesting cell and issue' 'What is needed' 'Example' 'Why' 'Priority hint' 'Definition of done'; do
+    body_of "$rn" | grep -xF "### $h" >/dev/null && ok || bad "remote body lacks heading $h"
+  done
+  body_of "$rn" | grep -xF "Kind: api" >/dev/null && ok || bad "remote body lacks Kind"
+  body_of "$rn" | grep -xF "$R#$mn" >/dev/null && ok || bad "remote body does not name the mirror"
+  body_of "$rn" | grep -F 'expected: `{"y": 1}`' >/dev/null && ok || bad "remote body lacks the example"
+  body_of "$mn" | grep -F "https://github.com/$R/issues/$rn" >/dev/null && ok || bad "mirror body does not link the remote"
+  api "issues/$rn/comments" --jq '.[].body' | grep -F "https://github.com/$R/issues/$mn" >/dev/null && ok || bad "remote has no comment linking the mirror"
+  # scope on the form-rendered body: the empty `### Definition of done` becomes the `##` section, the other headings stay
+  printf '## Definition of done\n\nInputs: from the example\n\nDepends on: #1\n' >"$tmp/dod3.md"   # a stray convention line is dropped
+  expect_out "{\"number\": $rn, \"route\": \"small\", \"priority\": 1, \"state\": \"ready\"}" \
+    scope "$rn" --dod "$tmp/dod3.md" --route small --priority 1 --repo "$R"
+  [ "$(body_of "$rn" | grep -cxF '## Definition of done')" -eq 1 ] && ok || bad "scope on a form body: ## heading count"
+  body_of "$rn" | grep -xF '### Definition of done' >/dev/null && bad "scope on a form body kept the ### heading" || ok
+  body_of "$rn" | grep -F 'Inputs: from the example' >/dev/null && ok || bad "scope on a form body did not write the dod"
+  body_of "$rn" | grep '^Depends on:' >/dev/null && bad "scope wrote a Depends on line from the dod file" || ok
+  for h in 'Requesting cell and issue' 'What is needed' 'Example' 'Why' 'Priority hint'; do
+    body_of "$rn" | grep -xF "### $h" >/dev/null && ok || bad "scope on a form body lost heading $h"
+  done
 fi
 
 echo "passed=$pass failed=$fail"
