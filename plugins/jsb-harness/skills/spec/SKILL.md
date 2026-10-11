@@ -101,7 +101,7 @@ residual-stream-viz first iteration).
    removed**, **Acceptance criteria**, **Non-goals**, **Constraints**, **Open
    questions**, **Linked issue**. A field with nothing to say reads `none`
    (`Open questions: none`); it is never omitted. `/split-spec` runs a
-   completeness check before anything else and refuses a delta missing any
+   completeness check before its splitter and refuses a delta missing any
    of them, naming the field, so an incomplete delta cannot be decomposed.
 3. Say what comes next, and that it comes *after* James merges the spec PR:
    /plan when the approach involves a real choice (multiple components, a

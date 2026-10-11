@@ -39,12 +39,16 @@ Review against, in priority order:
        not assert it. A statement names its test as `— test: <name>` or
        equivalent; open that test and check it exercises the statement,
        since a matching name is not evidence, and a deleted or inverted
-       test counts as none.
+       test counts as none. Report each statement once: under (a) when (a)
+       fires for it, else under (b).
    (c) The PR body's `## Spec changes` section disagrees with the diff: it
        says `none` while the diff changes or adds a statement in the
        `## Behavior` section of a `specs/*.md` file; it lists a statement the
-       diff does not change or add; or the section is missing. Spec edits outside `## Behavior`
-       (open questions, non-goals, decisions) do not make `none` wrong. A
+       diff does not change or add; or the section is missing while the diff
+       changes or adds such a statement. A missing section on a diff that
+       touches no Behavior statement (a dependency bump, a hand-opened fix)
+       is Minor, not Important. Spec edits outside `## Behavior` (open
+       questions, non-goals, decisions) do not make `none` wrong. A
        `none` that agrees with the diff is still wrong when (a) fails; report
        that under (a). Read the body with
        `gh pr view <n> --json body --jq .body`, or without `gh`,

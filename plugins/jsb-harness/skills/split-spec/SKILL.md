@@ -54,10 +54,13 @@ never with raw `gh` issue writes.
    ```
    The one exception is a new spec: its Pending changes has no `###` entry
    (it says the spec is new) and its Behavior is the whole contract, so run
-   this check on the top-level sections instead of the one above (exactly
-   one of the two runs, chosen by whether a `###` entry exists).
-   `## Behavior` stands in for the three "What" fields; the rest are `##`
-   sections and a `Linked issue:` line:
+   this check on the top-level sections instead of the one above. Exactly
+   one of the two runs; choose with
+   `sed -n '/^## Pending changes/,/^## /p' specs/<file> | grep -q '^### '`
+   (true: the awk above; false: this loop), since the awk prints nothing,
+   rather than failing, when there is no entry. `## Behavior` stands in
+   for the three "What" fields; the rest are `##` sections and a
+   `Linked issue:` line:
    ```bash
    for f in "## Behavior" "## Acceptance criteria" "## Non-goals" \
             "## Constraints" "## Open questions" "Linked issue:"; do
@@ -81,7 +84,9 @@ never with raw `gh` issue writes.
    context (the contract it codes against, shared by several tasks) exceeds
    what an issue body holds; otherwise the issue body is the whole brief.
 6. File the tasks through `cellq`, as sub-issues of the spec's linked parent
-   issue (the delta's `Linked issue`):
+   issue: the `Linked issue` of the delta each task was cut from (a spec
+   with several deltas has one parent per delta; a new spec's is its
+   `Linked issue:` line):
    - one issue per task, title from the task title, body file = definition of
      done + dependency notes + link to the spec (and sub-spec, if any):
      ```bash

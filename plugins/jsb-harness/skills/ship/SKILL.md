@@ -156,6 +156,7 @@ through it too, never with raw `gh issue edit`.
    ## Spec changes
    <spec file>: "<statement>" — test: <test name>
    ```
+   A statement the diff removes is listed the same way with `— test: removed`.
    The reviewer and James check this heading against the diff: `none` when
    the diff changes a statement under a spec's `## Behavior`, or a listed
    statement the diff does not touch, is an Important finding. Spec edits
