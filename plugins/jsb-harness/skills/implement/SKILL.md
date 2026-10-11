@@ -21,21 +21,24 @@ API is fine.
 
 ## Steps
 
-1. **Claim and read.**
+1. **Read, then claim.** Read before claiming, so that a stop leaves the
+   issue where it was. Read the issue (`gh issue view <n> --json
+   labels,body`): it must carry `route:small` (a `route:spec` issue is not
+   this skill's work: stop and say so, touching nothing) and its
+   `## Definition of done` must contain at least one testable statement
+   (if not, stop and send it back through the adapter so `scope` sees it:
+   `cellq state <n> new --reason "implement: definition of done has no
+   testable statement"`). Then read every spec the definition names
+   (`specs/*.md`) and any ADR in `docs/adr/` touching the area. Only now:
    ```bash
    cellq claim <n>
    ```
    Non-zero exit means the issue is not `state:ready` (or the environment is
    not set up); stop and report the stderr line. Do not work it anyway and
-   do not move its state by hand. Confirm the issue carries `route:small`
-   (`cellq list --route small` lists it); a `route:spec` issue is not this
-   skill's work — stop and say so.
-
-   Then read the issue's `## Definition of done` section and every spec it
-   names (`specs/*.md`), plus any ADR in `docs/adr/` touching the area. The
-   definition of done is the contract; if it has no testable statement,
-   stop and report that the issue needs `scope` again rather than inventing
-   one.
+   do not move its state by hand. After a successful claim, every stop in
+   this skill goes through the adapter (step 5's exit, or `cellq state <n>
+   ready --reason "<why>"` to release the claim); never end a session with
+   the issue left in progress.
 
 2. **Plan in-session when it is not obvious.** If the change touches more
    than one file, or you are not sure of the approach, write a short plan in
@@ -45,7 +48,8 @@ API is fine.
    straight to the change. Either way, this is the first moment to notice
    that the work may not fit the route: if the plan already lists more
    files than the route allows (step 5), take the exit now rather than
-   after building.
+   after building: the count in the reason is then the planned file count,
+   and the `; branch <name>` suffix is omitted because no branch exists yet.
 
 3. **Branch and build.** Branch from the default branch (fetch first;
    `git switch -c <branch> origin/<default>`), implement, and commit small
@@ -99,7 +103,10 @@ API is fine.
      spec marks as consumed by another cell.
 
    The exit, in this order and nothing else:
-   1. Do not open a PR. If `/ship` is already running, leave it.
+   1. Do not open a PR. If `/ship` is already running, abandon it before it
+      opens one. If a PR already exists, this skill is finished and the
+      threshold trip is reported as a comment on that PR for James; the
+      exit below is not taken.
    2. Comment the reason on the issue and move it back to new, through the
       adapter, in one call. The reason names R3 and the measured count or
       cause:
