@@ -3,9 +3,10 @@
 # cell-converge.yml) can run `/scope` or `/converge` and call `cellq`.
 #
 # Why this exists: there is no plugin install in Actions. The jsb-harness
-# plugin is installed on laptops and copied by a session-start hook in cloud
-# sessions, but a claude-code-action run on a runner has neither, so the
-# skills the workflow prompt names (`Run /<skill> on issue #<n>`, ADR 0008)
+# plugin is installed on laptops, and a cloud session reads skills a project
+# repo commits under .claude/skills/ (docs/cloud-capabilities.md), but a
+# claude-code-action run on a runner has neither, so the skills the workflow
+# prompt names (`Run /<skill> on issue #<n>`, ADR 0008)
 # would not resolve and `cellq` would not be on PATH. This composite action is
 # the sibling of setup-reviewer: the harness checkout that GitHub makes for
 # any `uses: JSBaxter/harness/...` reference already contains the plugin, so
