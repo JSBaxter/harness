@@ -98,7 +98,9 @@ cd "$here"
 
 echo "== offline: usage"
 expect_rc 2 bogus
-expect_rc 2 ready
+expect_rc 2 ready extra                                                     # ready takes no argument
+expect_rc 2 parent notanumber
+expect_rc 2 list --state                                                    # a filter needs a value
 expect_rc 2 scope 1
 expect_rc 2 state notanumber ready
 expect_rc 2 state 1 ready --repo not-a-repo
@@ -262,6 +264,77 @@ else
   for h in 'Requesting cell and issue' 'What is needed' 'Example' 'Why' 'Priority hint'; do
     body_of "$rn" | grep -xF "### $h" >/dev/null && ok || bad "scope on a form body lost heading $h"
   done
+
+  echo "== online: list"
+  # fixtures now: #$n dropped; #$p new with sub-issue #$c (source:agent); #$s blocked, route spec;
+  # #$k in-progress, claimed twice; #$d ready, depends on #$s and #$k; #$rn ready; #$mn blocked
+  has() { jq -e --argjson i "$2" 'any(.[]; .number == $i)' <<<"$1" >/dev/null; }
+  row() { jq -c --argjson i "$2" '.[] | select(.number == $i)' <<<"$1"; }
+  rows=$(cq list)
+  for i in "$p" "$c" "$s" "$k" "$d" "$rn" "$mn"; do has "$rows" "$i" && ok || bad "list lacks open #$i"; done
+  has "$rows" "$n" && bad "list shows closed #$n" || ok
+  [ -z "$pr" ] || { has "$rows" "$pr" && bad "list shows pull request #$pr" || ok; }
+  [ "$(jq -c '.[0] | keys' <<<"$rows")" = '["claimed_at","claimed_by","created_at","depends_on","number","parent","priority","route","source","state","title"]' ] \
+    && ok || bad "list row keys: $(jq -c '.[0] | keys' <<<"$rows")"
+  r=$(row "$rows" "$k")                                                    # the latest claim comment wins
+  [ "$(jq -r '[.state, .claimed_by] | join(" ")' <<<"$r")" = "in-progress explicit-ref" ] \
+    && jq -r .claimed_at <<<"$r" | grep -Ex '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' >/dev/null \
+    && ok || bad "list row for claimed #$k: $r"
+  r=$(row "$rows" "$d")                                                    # scoped, never claimed, two dependencies
+  [ "$(jq -c '[.state, .route, .source, .priority, .depends_on, .claimed_by, .claimed_at, .parent]' <<<"$r")" \
+    = "[\"ready\",\"small\",\"own\",1,[$s,$k],null,null,null]" ] && ok || bad "list row for #$d: $r"
+  jq -r '.title + " " + .created_at' <<<"$r" | grep -Ex 'cellq test depend [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z' >/dev/null && ok || bad "list title or created_at: $r"
+  [ "$(row "$rows" "$c" | jq -c '[.parent, .source, .state, .route, .priority]')" = "[$p,\"agent\",\"new\",null,null]" ] \
+    && ok || bad "list row for sub-issue #$c: $(row "$rows" "$c")"
+  [ "$(cq list --state in-progress | jq -c '[.[].number]')" = "[$k]" ] && ok || bad "list --state in-progress"
+  [ "$(cq list --route spec | jq -c '[.[].number]')" = "[$s]" ] && ok || bad "list --route spec"
+  [ "$(cq list --source agent | jq -c '[.[].number]')" = "[$c]" ] && ok || bad "list --source agent"
+  [ "$(cq list --state ready --route small --source own | jq -c '[.[].number]')" = "[$d]" ] && ok || bad "list with three filters"
+  rows=$(cq list --state dropped)                                          # closed issues, only when asked for
+  has "$rows" "$n" && [ "$(row "$rows" "$n" | jq -r .state)" = dropped ] && ok || bad "list --state dropped lacks #$n"
+  has "$rows" "$d" && bad "list --state dropped shows open #$d" || ok
+  [ "$(cq list --state done | jq -c '[.[].number]')" = "[]" ] && ok || bad "list --state done is not empty"
+  expect_rc 1 list --state nonsense --repo "$R"
+  expect_rc 1 list --source weird --repo "$R"
+
+  echo "== online: parent"
+  expect_out "{\"parent\": $p, \"sub_issues\": [], \"all_closed\": true}" parent "$c" --repo "$R"
+  expect_out "{\"parent\": null, \"sub_issues\": [{\"number\": $c, \"closed\": false}], \"all_closed\": false}" parent "$p" --repo "$R"
+  cq complete "$c" >/dev/null
+  expect_out "{\"parent\": null, \"sub_issues\": [{\"number\": $c, \"closed\": true}], \"all_closed\": true}" parent "$p" --repo "$R"
+  expect_rc 1 parent 999999 --repo "$R"
+
+  echo "== online: ready"
+  # thresholds come from <git toplevel>/thresholds.yml: the offline section's repo has edges.other: 0.5
+  ready() { local out; cd "$tmp/repo"; out=$(cq ready); cd "$here"; printf '%s' "$out"; }
+  cd "$tmp"; expect_rc 1 ready --repo "$R"; cd "$here"                      # no repository, no thresholds
+  git init -q "$tmp/bare" && cd "$tmp/bare"; expect_rc 1 ready --repo "$R"; cd "$here"   # repository without the file
+  o=$(cq idea "cellq test ready other" --source cell:other | jq -r .number); created+=("$o")
+  cq scope "$o" --dod "$tmp/dod.md" --route small --priority 3 >/dev/null
+  w=$(cq idea "cellq test ready own" | jq -r .number); created+=("$w")
+  cq scope "$w" --dod "$tmp/dod.md" --route small --priority 2 >/dev/null
+  w2=$(cq idea "cellq test ready own later" | jq -r .number); created+=("$w2")
+  cq scope "$w2" --dod "$tmp/dod.md" --route small --priority 2 >/dev/null
+  out=$(ready)
+  # own at priority 2 outranks cell:other at priority 3 weighted 0.5; equal scores go to the older issue
+  [ "$(jq -c '[.[0:3][].number]' <<<"$out")" = "[$w,$w2,$o]" ] && ok || bad "ready order: $(jq -c '[.[] | [.number, .score]]' <<<"$out")"
+  jq -e '.[0] | .priority == 2 and .source == "own" and .weight == 1 and .score == 2' <<<"$out" >/dev/null && ok || bad "ready own row: $(jq -c '.[0]' <<<"$out")"
+  jq -e '.[2] | .priority == 3 and .source == "cell:other" and .weight == 0.5 and .score == 1.5' <<<"$out" >/dev/null && ok || bad "ready other row: $(jq -c '.[2]' <<<"$out")"
+  [ "$(jq -c '.[0] | keys' <<<"$out")" = '["created_at","number","priority","score","source","title","weight"]' ] && ok || bad "ready row keys: $(jq -c '.[0] | keys' <<<"$out")"
+  has "$out" "$rn" && jq -e --argjson i "$rn" '.[] | select(.number == $i) | .weight == 0.5' <<<"$out" >/dev/null \
+    && ok || bad "ready: cell:${R#*/} issue #$rn should carry edges.default"     # no edges.<cell> key for it
+  has "$out" "$d" && bad "ready lists #$d, whose dependencies are open" || ok
+  has "$out" "$k" && bad "ready lists #$k, which is in-progress" || ok
+  # an open dependency holds an issue back until it closes
+  A=$(cq idea "cellq test ready A" | jq -r .number); created+=("$A")
+  B=$(cq idea "cellq test ready B" | jq -r .number); created+=("$B")
+  cq scope "$A" --dod "$tmp/dod.md" --route small --priority 5 >/dev/null
+  cq depend "$A" "$B" >/dev/null
+  has "$(ready)" "$A" && bad "ready lists #$A while #$B is open" || ok
+  cq complete "$B" >/dev/null
+  out=$(ready)
+  has "$out" "$A" && ok || bad "ready lacks #$A after #$B closed"
+  [ "$(jq -r '.[0].number' <<<"$out")" = "$A" ] && ok || bad "ready: #$A at priority 5 should rank first"
 fi
 
 echo "passed=$pass failed=$fail"
