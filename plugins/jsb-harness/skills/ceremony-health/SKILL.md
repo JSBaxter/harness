@@ -1,6 +1,6 @@
 ---
 name: ceremony-health
-description: Health check. Runs from a ceremony issue the cell-ceremony workflow files and ends in PRs James merges, issues, or a report, never a direct change to the default branch. Reads every active or draft spec's Behavior against the code and the test suite, classifies each statement as met, unmet or dead, folds shipped behaviour still sitting in Pending changes, proposes deletions for behaviour that no longer exists, files an issue per unmet statement, and posts the self-description report. Invoked by name from the ceremony issue; never self-selected.
+description: Health check. Runs from a ceremony issue the cell-ceremony workflow files and ends in PRs James merges, issues, or a report, never a direct change to the default branch. Reads every active or draft spec's Behavior against the code and the test suite, classifies each statement as met, unmet or dead (or, when it is not about what the software does, as one to move out of Behavior), folds shipped behaviour still sitting in Pending changes, proposes deletions for behaviour that no longer exists, files an issue per unmet statement, and posts the self-description report. Invoked by name from the ceremony issue; never self-selected.
 ---
 
 # Ceremony: health
@@ -10,7 +10,10 @@ true, and can the cell prove it? A statement is proved by its test passing
 on the default branch, with no open gap issue against it and the gate green.
 Statements the cell can no longer prove become issues; statements about
 behaviour that is gone become a proposal to delete them; behaviour that
-shipped but was never folded into Behavior is folded. The whole thing ends
+shipped but was never folded into Behavior is folded. Only statements about
+what the software does are counted: one that is documentation, process or
+convention does not belong in Behavior, so it is proposed for moving out,
+not counted as met or unmet. The whole thing ends
 in a self-description report: the features the cell offers and whether its
 requirements are met. Everything the ceremony does is an adapter call, a
 proposal PR, an issue, or a report; it never pushes to the default branch
@@ -52,10 +55,19 @@ those lines into the report.
    section, that is, from that heading to the next `## ` heading, its
    `### ` sub-headings included, and each row of a table there whose cells
    state a rule (a key and what it does, a verb and its effect); a
-   paragraph of prose is context, not a statement. A statement names its
-   test when it ends `— test: <name>` (the `spec` skill's form), where the
-   name is a test function, a command, or a file and line, as `converge`
-   step 3 writes them.
+   paragraph of prose is context, not a statement. A statement is a
+   Behavior statement only when it is about what the software does
+   (something runs, returns, exits, refuses, writes, shows). A list item
+   in `## Behavior` that is documentation, process or convention (what a
+   document says, a step a person takes by hand, how a thing is named or
+   laid out) is not one: record it as `MOVE` (step 3), run nothing for
+   it, and leave it out of every count. A statement names its test when
+   it ends `— test: <name>` (the `spec` skill's form) and the name is a
+   test: a test function or case the runner re-runs, or a screenshot
+   comparison for UI appearance, as `converge` step 3 writes them. A
+   command or a file and line after `— test:` is not a test name:
+   treat such a statement as unnamed in step 2, so its test is searched
+   for and, when found, named by step 5.
 
    Evidence must come from merged code, not from the branch this session
    happens to be on. Fetch, put the default branch in its own worktree
@@ -70,8 +82,8 @@ those lines into the report.
 2. **Find and run each statement's test.** For every statement:
    - **Named test.** Find the test by its name: a test function or case by
      grep across the test directory CLAUDE.md's test command points at
-     (`grep -rn '<name>' tests/`, or the directory the command names); a
-     command by running it; a file and line by reading it. Run the named
+     (`grep -rn '<name>' tests/`, or the directory the command names), or
+     a screenshot comparison by the test that runs it. Run the named
      test on its own through the cell's test runner (`pytest -k <name>`,
      `python3 -m unittest <module>.<Class>.<name>`, `bash <script>` for a
      shell test, as the test command indicates), and keep the runner's
@@ -90,16 +102,20 @@ those lines into the report.
      them after `— test:`. When no test asserts it, or the tests found
      cover only part of it, the statement has no test, and the evidence
      says which clause is uncovered.
-   - **Content statements** (a file says, contains, names something) are
-     checked by reading the file at the line; the evidence is the file and
-     line, and "passing" means the line still says it.
+   - **Not a Behavior statement** (documentation, process or convention,
+     step 1): look for no test and run nothing, because a test that only
+     asserts a document changed is not wanted; step 3 records it `MOVE`.
 
    Quote real output. Never report a run you did not do, and never run a
    test command from another repository because CLAUDE.md names a
    placeholder; a placeholder test command means every behaviour statement
    has no runnable test, and the report says so once at the top.
 
-3. **Classify each statement.** Three classes, decided in this order:
+3. **Classify each statement.** Four records, decided in this order:
+   - **Move out of Behavior**: the statement is not about what the
+     software does (step 1). It is neither met nor unmet and is not
+     counted; step 5 moves it by proposal PR. The evidence is where it
+     belongs (`Constraints`, `Non-goals`, `README.md`, or an ADR) and why.
    - **Dead**: the behaviour no longer exists in code. The thing the
      statement describes (the function, the verb, the flag, the file, the
      endpoint) is absent from the default branch, and `git log -S'<name>'
@@ -157,6 +173,7 @@ those lines into the report.
    MET   <spec>: <statement> — <evidence>
    UNMET <spec>: <statement> — <evidence>
    DEAD  <spec>: <statement> — <evidence>
+   MOVE  <spec>: <statement> — <destination>: <why it is not Behavior>
    ```
 
 4. **Fold unfolded shipped behaviour.** For each spec in scope, read every
@@ -185,7 +202,8 @@ those lines into the report.
    `plugins/jsb-harness/skills/converge/SKILL.md`; from source in a cloud
    session) with two differences: the parent is already closed, so
    `converge` step 1's gate on it is replaced by the checks above, and
-   from step 3 only the spec edits are taken: the fold goes into this
+   from step 3 only the edits are taken (the spec, and the README or
+   `docs/adr/` for items routed out of Behavior): the fold goes into this
    spec's proposal PR (step 6) rather than a PR of its own, so that one PR
    per spec carries everything health proposes for it, and `converge`'s
    closing `cellq state <n> in-review` is never run, because any state
@@ -204,7 +222,15 @@ those lines into the report.
    cannot be read from source, do not improvise a fold; list the delta as
    "needs converge" and move on.
 
-5. **Act on dead and unmet statements.**
+5. **Act on dead, unmet and moved statements.**
+   - **Move out of Behavior**: as an edit kept for the spec branch of step
+     6, delete the statement from Behavior, drop any `— test:` ending, and
+     put its text where the record says: the spec's `## Constraints` (a
+     rule the cell holds to), its `## Non-goals` (something the cell will
+     not do), the README (what a reader of the repository needs), or a new
+     ADR under `docs/adr/` in the `adr` skill's form (a decision worth
+     remembering). No issue; the report lists it as moved, with the PR as
+     its action.
    - **Dead**: as an edit kept for the spec branch of step 6, delete the
      statement from Behavior. When every statement of the spec is dead and another spec
      in `specs/` now describes the capability, instead change the spec's
@@ -222,8 +248,9 @@ those lines into the report.
      reason of its own, handled by the "Unmet, otherwise" bullet as well.
    - **Met but unnamed** (an unnamed statement whose tests step 2 found and
      ran): on the spec branch, append `— test: <names>` to the statement,
-     so the next health run finds the tests by name; no issue, and the
-     statement counts as met.
+     replacing an ending that named a command or a file and line, so the
+     next health run finds the tests by name; no issue, and the statement
+     counts as met.
    - **Unmet, otherwise** (no test, a failing test, a deleted test with no
      test under another name, an open gap, or a red gate; a renamed test
      with a gap or a red gate gets the reference edit above and appears
@@ -273,12 +300,13 @@ those lines into the report.
    proposes them. Otherwise, one spec at a time: a branch from the default
    branch in the worktree of step 1 (`git switch -c
    health/<spec-name>-<date> origin/<default>`), the edits kept from
-   steps 4 and 5 for this spec file and nothing else, commit, push, open
+   steps 4 and 5 for this spec file (and, for a move or a fold's routed
+   item, `README.md` or `docs/adr/`) and nothing else, commit, push, open
    the PR, and only then the next spec's branch, so no spec's edits sit
    uncommitted when another branch is cut. `git status` must show only
-   that file under `specs/`; if it shows anything else, revert it before
-   committing. Commit as
-   `docs(spec): health <spec-name> — fold, prune, name tests` (keep only
+   that spec file and any README or ADR a move touched; if it shows
+   anything else, revert it before committing. Commit as
+   `docs(spec): health <spec-name> — fold, prune, name tests, move` (keep only
    the parts that apply), with a body saying why: the ceremony issue, the
    commit checked, and one line per change. Push the branch (never the
    default branch) and open the PR with the `proposal` label at creation,
@@ -295,10 +323,13 @@ those lines into the report.
    issue and the commit checked; `## Folded` with each delta's name, its
    parent, and the `PASS` lines from step 4 verbatim; `## Removed` with
    each dead statement and its evidence; `## Test references` with each
-   statement and the test now named; a `## Spec changes` section in
-   `/ship` step 9's form, one line per statement the diff adds to, changes
-   in, or removes from Behavior (`<spec file>: "<statement>" — test:
-   <name>`, or `— test: removed`). A fold's parent is closed already, so
+   statement and the test now named; `## Moved out of Behavior` with each
+   moved statement and where it went; `## Outside Behavior` as `converge`
+   step 3 writes it, for a fold's routed items; a `## Spec changes`
+   section in `/ship` step 9's form, one line per statement the diff adds
+   to, changes in, or removes from Behavior (`<spec file>: "<statement>"
+   — test: <name>`, or `— test: removed`, with `(moved to <where>)` after
+   `removed` for a moved statement). A fold's parent is closed already, so
    no `Closes` line is needed; name the parent in `## Folded` instead.
    Open no PR for a spec with nothing to change.
 
@@ -324,8 +355,13 @@ those lines into the report.
    |---|---|---|---|
    | <name> | <statement> | <evidence> | #<issue> \| PR #<n> (test reference) \| in progress: #<parent> |
 
+   ### Moved out of Behavior
+   | Spec | Statement | Destination | Action |
+   |---|---|---|---|
+   | <name> | <statement> | Constraints \| Non-goals \| README.md \| docs/adr/<file> | PR #<n> |
+
    ### Proposals and gaps
-   - PR #<n> <spec>: folded <delta>; removed <k> statements; named <k> tests
+   - PR #<n> <spec>: folded <delta>; removed <k> statements; named <k> tests; moved <k> out of Behavior
    - PR #<p> <spec>: pending James's merge (changes not in it: <list> | none)
    - Gap #<n>: <criterion> (delta <name>, parent #<p>)
    - Fold pending: <name> in <spec> (fold PR #<p> open | gap #<g> open)
@@ -339,7 +375,9 @@ those lines into the report.
 
    The verdict counts unmet statements only; dead statements are proposals
    and shipped-but-unfolded deltas are folds, neither a failed
-   requirement. "requirements met" is the verdict when that count is zero
+   requirement; and the Met, Unmet and Dead columns count Behavior
+   statements only, so a statement moved out of Behavior is in none of
+   them. "requirements met" is the verdict when that count is zero
    across every spec in scope, dead statements notwithstanding; the
    parenthesis appears only when a draft spec in progress contributes to
    the count. Every PR, issue and statement the ceremony touched appears in

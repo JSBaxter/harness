@@ -67,7 +67,14 @@ API is fine.
    ```markdown
    - <the statement> — test: <test name>
    ```
-   A test that does not yet exist is not a test name; write it first. For
+   A test that does not yet exist is not a test name; write it first. Nor
+   is a command or a file and line: the name is a test the runner re-runs
+   (a test function or case, or a screenshot comparison for UI
+   appearance). A statement that is documentation, process
+   or convention (what a document says, a step a person takes by hand,
+   how a thing is named or laid out) is not a Behavior statement: put it
+   in the spec's Constraints or Non-goals, with no test line, where it
+   produces no `## Spec changes` line. For
    each statement, keep a line in the form `/ship`'s `## Spec changes`
    section wants, ready to hand over in step 6:
    ```markdown

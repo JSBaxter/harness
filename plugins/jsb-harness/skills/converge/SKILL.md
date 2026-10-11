@@ -1,15 +1,20 @@
 ---
 name: converge
-description: "Check a parent issue's delta against main after its last sub-issue closes; fold it into Behavior by proposal PR, or open a gap issue. Never edits code."
+description: "Check a parent issue's delta against main after its last sub-issue closes; fold it into the spec by proposal PR (behaviour into Behavior with its test; documentation, process and convention elsewhere), or open a gap issue. Never edits code."
 ---
 
 # Converge
 
 When every task cut from a spec delta has closed, check the delta's
 acceptance criteria against what actually merged. All pass: fold the delta
-into the spec's Behavior as a proposal PR that closes the parent. Any fail:
-open a gap issue under the parent and leave the spec alone. This skill
-reads code and runs tests; it never changes a file outside `specs/`.
+into the spec as a proposal PR that closes the parent: what the software
+does goes into Behavior, each statement naming a real, re-runnable test;
+what is documentation, process or convention goes into Constraints,
+Non-goals, the README or an ADR, with no test. Any fail: open a gap
+issue under the parent and leave the spec alone. A
+behaviour criterion with no test is a fail: a command or a file and line
+is evidence of a check, not a test. This skill reads code and runs tests;
+it never changes code, tests or workflows.
 
 Argument: the parent issue number (the cell-converge workflow prompt is
 `Run /converge on issue #<n>`; a person or the grooming ceremony may also
@@ -108,8 +113,9 @@ absent).
    every line under the delta's `Acceptance criteria`, and nothing else:
    the criteria are what the delta promised and what the fold-or-gap
    decision below turns on. For each, decide pass or fail and keep the
-   evidence: a test name and its result, a command and its output, or a
-   file and line. Write one line per criterion, exactly in this form, with
+   evidence: for a behaviour criterion, a test name and its result; for a
+   criterion about documentation, process or convention, the file and line
+   that shows it. Write one line per criterion, exactly in this form, with
    the criterion quoted word for word as the delta states it (the gap
    title in step 4 is matched on it):
    ```
@@ -121,7 +127,7 @@ absent).
    threshold no.such.key` exits non-zero and stderr names `no.such.key`":
    ```
    PASS `cellq threshold task.max_files` prints the value from `thresholds.yml` — test_threshold_reads_scalar passed (pytest, exit 0)
-   FAIL `cellq threshold no.such.key` exits non-zero and stderr names `no.such.key` — `cellq threshold no.such.key` printed `null` and exited 0; stderr empty
+   FAIL `cellq threshold no.such.key` exits non-zero and stderr names `no.such.key` — no test asserts it (`grep -rn 'no.such.key' tests/` returned nothing); `cellq threshold no.such.key` printed `null` and exited 0, stderr empty
    ```
    Rules:
    - Every criterion gets a line; none is skipped, deferred or marked
@@ -137,14 +143,27 @@ absent).
      evidence begins `environmental:` and says exactly what could not be
      run and why, so that the gap it opens (step 4) is read as a request
      for the resource, not for a code change.
-   - The kind of evidence follows the kind of criterion. A criterion about
-     behaviour (something runs, returns, exits, refuses) passes only on a
-     test's result or a command's output; one about content (a file says,
-     contains, names something) passes on the file and line that shows it.
-     A behaviour criterion with no test that asserts it and no command
-     that exercises it is a `FAIL` with the search that found nothing as
-     evidence (`grep -rn '<name>' tests/` returned nothing). Writing the
-     missing test is a fix, and fixes are not this skill's work (step 5).
+   - A behaviour criterion (something runs, returns, exits, refuses,
+     writes, shows) passes only on the result of a real, re-runnable test:
+     a test function or case the cell's test runner runs, or, for UI
+     appearance, a screenshot comparison. A command's output or a file and
+     line is evidence of a check, not a test: it may follow the test's
+     result on a `PASS` line and it belongs on a `FAIL` line, but it never
+     makes a `PASS` on its own. Find the test by its name, or by grepping
+     the test directory for the identifiers the criterion uses, and run it
+     on its own through the runner. A behaviour criterion with no test
+     that asserts it is a `FAIL` whose evidence begins `no test asserts
+     it` and quotes the search that found nothing (`grep -rn '<name>'
+     tests/` returned nothing), then what a command showed if you ran one;
+     the gap it opens (step 4) is read as a request for the test. Writing
+     the missing test is a fix, and fixes are not this skill's work (step
+     5).
+   - A criterion about documentation, process or convention (a file says,
+     contains or names something; a step a person takes by hand; a name
+     or layout that holds) passes on the file and line that shows it. No
+     test is asked of it, because a test that only asserts a document
+     changed is not wanted; and what it describes is not a Behavior
+     statement, so step 3 folds it outside Behavior.
    - Quote real output. Never report a run you did not do, and never run a
      test command from another repository because CLAUDE.md names a
      placeholder; say that the placeholder is there, and let that
@@ -156,27 +175,45 @@ absent).
    default branch, named for the parent and the commit the evidence came
    from so that a later run never collides with it
    (`git switch -c converge/fold-<n>-<short sha> origin/<default>`, in
-   the worktree from step 2), edit the spec file and nothing else:
-   - Move all of the delta's **What changes** content into `## Behavior`,
-     as statements, under the heading of the area each one belongs to
-     (add a heading only when none fits). Cut one statement per
-     acceptance criterion, worded from What changes, and end it by naming
-     what that criterion's evidence line named:
-     ```markdown
-     - <the statement> — test: <test name>
-     ```
-     The thing after `test:` is what the next reader re-runs or re-reads
-     to check the statement: the test name; the command, when the evidence
-     was a command (`— test: cellq threshold no.such.key exits non-zero`);
-     or the file and line, when the criterion was about content
-     (`— test: README.md:12`). What-changes content that no criterion
-     covers still moves, as its own statement with no `— test:` ending
-     (a statement names its test once one exists), and the PR body lists
-     each such statement under `## Untested`, so James sees what the
-     delta described but never promised to check; the health ceremony
-     reports it until a test exists.
+   the worktree from step 2), edit the spec file, and the README or
+   `docs/adr/` only for what the second bullet routes there, and nothing
+   else:
+   - Sort the delta's **What changes** content into statements and route
+     each by what it is about:
+     - **What the software does** (something runs, returns, exits,
+       refuses, writes, shows) goes into `## Behavior`, under the heading
+       of the area it belongs to (add a heading only when none fits). Cut
+       one statement per behaviour criterion, worded from What changes,
+       and end it by naming the test that criterion's evidence line named:
+       ```markdown
+       - <the statement> — test: <test name>
+       ```
+       The thing after `test:` is a test name and nothing else: a test
+       function or case the runner re-runs, or a screenshot comparison
+       for UI appearance; never a command and never a file and line.
+       Behaviour content that no criterion covers enters Behavior only
+       with a test: search the suite for one that asserts it (the
+       identifiers it uses, grepped across the tests, as the health
+       ceremony's step 2 does) and name it; when none asserts it, the
+       statement does not fold, and the PR body lists it under
+       `## Outside Behavior` as not folded, so James can add a criterion
+       to the delta or let it go. A statement without a test never enters
+       Behavior.
+     - **Documentation, process or convention** (what a document says, a
+       step a person takes by hand, how a thing is named or laid out)
+       never enters Behavior and gets no `— test:` line. Fold it where it
+       belongs: a rule the cell holds to into the spec's `## Constraints`;
+       something the cell will not do into `## Non-goals`; what a reader
+       of the repository needs into the README; a decision worth
+       remembering into an ADR under `docs/adr/`, in the `adr` skill's
+       form. The PR body lists each such item and where it went under
+       `## Outside Behavior`.
    - For a new spec, Behavior is already written: add the `— test:` ending
-     to each statement a criterion covers, change `Status: draft` to
+     to each statement a criterion covers; route a statement that is
+     documentation, process or convention out of Behavior as above; keep a
+     behaviour statement no criterion covers only with a test found as
+     above, and otherwise remove it and list it under `## Outside
+     Behavior` as not folded. Then change `Status: draft` to
      `Status: active`, leave the top-level `## Acceptance criteria` where
      it is, and replace the whole `## Pending changes` body (the "this
      spec is new" text and the bare `Linked issue:` line) with `None.`
@@ -188,9 +225,10 @@ absent).
      same name; the rest leave with the delta.
    - Delete the whole `### ` entry from `## Pending changes`. When no entry
      remains, the section reads `None.`
-   - Do not touch `## Acceptance criteria` or any other file. `git status`
-     must show only files under `specs/`; if it shows anything else, revert
-     that file before committing.
+   - Do not touch `## Acceptance criteria`. `git status` must show only
+     the spec file and, for items routed out of Behavior, `README.md` or
+     files under `docs/adr/`; if it shows anything else, revert that file
+     before committing.
 
    Commit as `docs(spec): fold <delta name>`, with a body saying why: the
    parent, and that every criterion passed on the default branch at the
@@ -213,9 +251,13 @@ absent).
    - a `## Spec changes` section in `/ship` step 9's form, one line per
      statement the diff adds to, changes in, or removes from Behavior
      (`<spec file>: "<statement>" — test: <test name>`, or `— test:
-     removed`; a new-spec fold lists each statement it gave a test);
-   - `## Untested`, listing any statement folded without a test, or
-     omitted when there is none;
+     removed`, with `(moved to <where>)` after `removed` when a new-spec
+     fold routed the statement out of Behavior; a new-spec fold lists
+     each statement it gave a test);
+   - `## Outside Behavior`, listing each What-changes item that did not
+     become a Behavior statement and where it went (`Constraints`,
+     `Non-goals`, `README.md`, `docs/adr/<file>`, or `not folded: no
+     criterion, no test asserts it`), or omitted when there is none;
    - `Closes #<n>`, so the merge closes the parent.
    Open no other PR and no issue. Then move the parent to in-review through
    the adapter, so the queue shows a PR exists for it and the grooming
@@ -245,6 +287,9 @@ absent).
    ## Audit
    <the three questions from step 6>
    ```
+   When the criterion failed for want of a test, say so under
+   `## Suggested fix` (step 5): which test to write and where, so the gap
+   reads as a request for a test, not for a code change.
    Before filing, look for an earlier gap with the same title: `gh issue
    list --state all --search "<words> in:title" --json
    number,title,state,labels`, where `<words>` are the criterion's words
@@ -275,12 +320,13 @@ absent).
    yourself; that line is the adapter's fallback and `link` writes it when
    it must.
 
-5. **Only `specs/` changes.** Whatever the evidence suggests, this skill
+5. **Only documents change.** Whatever the evidence suggests, this skill
    edits no code, no test and no workflow, and opens no PR but the fold.
    If a fix looks obvious while reading, put it in the gap issue body
    under `## Suggested fix`, as prose for the implementing agent, and move
-   on. A fold PR whose diff touches anything outside `specs/` is wrong
-   even if every criterion passed.
+   on. A fold's diff is the spec and, for items step 3 routes out of
+   Behavior, `README.md` or `docs/adr/`; a fold PR whose diff touches
+   anything else is wrong even if every criterion passed.
 
 6. **The short audit form.** Spec open question three defaults to a
    comment thread, so the questions live where James will already be
