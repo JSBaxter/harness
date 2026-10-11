@@ -36,10 +36,13 @@ step 9 turns those lines into the report.
 
 1. **Open the ceremony issue.** Read it (`gh issue view <n> --json
    title,labels,state,comments`). It must be open, carry `source:ceremony`,
-   and its title must name grooming; otherwise stop and report what it is.
+   and its title must start `Ceremony: grooming` (the form the
+   cell-ceremony workflow files); otherwise stop and report what it is.
    Find the previous grooming: the most recently closed issue with
-   `source:ceremony` whose title names grooming (`cellq list --state done
-   --source ceremony`, then by title and `created_at`). Its creation time
+   `source:ceremony` whose title starts `Ceremony: grooming` (`cellq list
+   --state done --source ceremony`, then by title and `created_at`; a
+   finding a ceremony opened carries the same label without the
+   `Ceremony: ` prefix and is not one). Its creation time
    is "the last grooming" below; when there is none, the cell has not been
    groomed before and the steps that compare against it say so in the
    report instead of guessing.
@@ -88,9 +91,10 @@ step 9 turns those lines into the report.
      cellq state <n> dropped --reason "drop: James's comment of <date>"
      ```
    - **Candidates for James.** For every other open issue in `new`,
-     `needs-input`, `ready` or `blocked`, except ceremony issues
-     (`source:ceremony` with no `## Definition of done`) and `route:spec`
-     parents (their activity is in their sub-issues), take its last
+     `needs-input`, `ready` or `blocked`, except the ceremony issues the
+     workflow filed (`source:ceremony` with a title starting `Ceremony: `)
+     and `route:spec` parents (their activity is in their sub-issues),
+     take its last
      activity as
      `updatedAt` (`gh issue view <n> --json updatedAt`; a label, body or
      comment change all move it). An issue whose last activity is older
@@ -107,13 +111,14 @@ step 9 turns those lines into the report.
 4. **Rescore by the edge table.** Edge weights change when the retro's
    threshold PR merges, so a priority set at scoping can be out of date.
    For each issue in `cellq list --state ready`, first tell the ceremony
-   issues apart from the rest: an issue carrying `source:ceremony` with no
-   `## Definition of done` section is a ceremony issue the workflow filed
-   ready (the audit's may wait there for James); skip it, it is never
-   rescored or sent back. A ceremony-opened task (`source:ceremony` with a
-   definition of done and a route) is rescored like any other, since a
-   retro change to `edges.default` is exactly what should reach it. For
-   each remaining issue, recompute the priority exactly as `scope` step 5
+   issues apart from the rest: an issue carrying `source:ceremony` whose
+   title starts `Ceremony: ` is a ceremony issue the workflow filed ready
+   (the audit's may wait there for James); skip it, it is never rescored
+   or sent back. A finding a ceremony opened (`source:ceremony` without
+   that prefix, scoped by `scope` like any other issue) is rescored like
+   any other, since a retro change to `edges.default` is exactly what
+   should reach it. For each remaining issue, recompute the priority
+   exactly as `scope` step 5
    does: the hint from the body's `Priority hint`
    field when it has a value, else the default `scope` uses when there is
    none; times the weight for the issue's `source:` label:
@@ -164,35 +169,50 @@ step 9 turns those lines into the report.
    A spec whose count exceeds the limit is flagged, once: if no open issue
    is titled `Split spec: <path>` (`cellq list --source ceremony`, then by
    title), write a body naming the spec, the count, the limit key and each
-   delta's heading, plus a `## Definition of done` section whose
-   acceptance statement is that the spec's Pending changes count is within
-   `spec.max_unfolded_deltas` again, reached by the right remedy per delta:
-   a delta still to be built is cut by `/split-spec` into its own sub-spec
-   or tasks; a delta whose tasks have all shipped is folded by `/converge`
-   (its parent's sub-issues are closed), not split. Open it:
+   delta's heading, and saying what closing it looks like: the spec's
+   Pending changes count is within `spec.max_unfolded_deltas` again,
+   reached by the right remedy per delta: a delta still to be built is cut
+   by `/split-spec` into its own sub-spec or tasks; a delta whose tasks
+   have all shipped is folded by `/converge` (its parent's sub-issues are
+   closed), not split. Open it and leave it in `new`:
    ```bash
    cellq idea "Split spec: <path>" --body <file> --source ceremony
    ```
-   Then make it ready (the `scope` skill stops on `source:ceremony`, so
-   the ceremony scopes what it opens): the route is `small` (one
-   `/split-spec` run, one PR), the priority as step 4 computes for
-   `source:ceremony`:
-   ```bash
-   cellq scope <n> --dod <dod-file> --route small --priority <p>
-   ```
+   No route, priority, state or `## Definition of done` section: `scope`
+   writes those, and it treats a `source:ceremony` finding like any other
+   issue (it skips only the `Ceremony: ` issue itself). Step 7 of this
+   ceremony, `/scope <n>` by hand, or the cell-scope workflow when its
+   guard lets a `source:ceremony` issue through, gets it there.
 
 7. **Route what is still new.** Collect the issues in `cellq list --state
    new` and the open issues with no `state:` label at all (`gh issue list
    --state open --json number,labels`, keeping those with no label starting
    `state:`): the latter were opened from the web UI or with raw `gh` and
    their `cell-scope` run never labelled them, which `scope` step 1 treats
-   as new. For each one that does not carry `source:ceremony`, run
-   `/scope` on it (the skill in
+   as new. For each one, run `/scope` on it (the skill in
    `plugins/jsb-harness/skills/scope/SKILL.md`; from source in a cloud
-   session) and record the state it set. An issue in new that carries
-   `source:ceremony` was opened by a ceremony that did not finish scoping
-   it; write its definition of done from its body as that ceremony would
-   have and record it with `cellq scope` as step 6 does.
+   session) and record the state it set. Findings the ceremonies open
+   (`source:ceremony`, title not starting `Ceremony: `) are among them:
+   they are filed into new for `scope`, and this step is how they reach it
+   when no cell-scope run followed their opening (an issue opened with an
+   Actions token fires no event, and the workflow's guard may not let a
+   `source:ceremony` issue through). For the same reason, also collect
+   the issues in `cellq list --state needs-input` that James has
+   answered: read the comments in order; the question is the *latest*
+   comment whose body starts `state: needs-input —` (there is one per
+   round, and whoever posted it, it is the adapter's, never an answer);
+   the issue is answered when a comment by the repository owner whose
+   body does not start `state:` follows that latest question. Run
+   `/scope` on each answered one; it treats the answer as part of the
+   issue. One with nothing after its latest question is waiting on James;
+   leave it, so an unanswered question is not asked again. One with no
+   such comment at all was moved there by hand without a reason: run
+   `/scope` on it too, which asks its own question if it needs one. The
+   one issue `/scope` stops on is a
+   ceremony issue the workflow filed (`source:ceremony` with a title
+   starting `Ceremony: `) that is still in new, which means the workflow
+   run that filed it failed before moving it to ready: list it in the
+   report for James and leave it.
    When `/scope` ends in `needs-input`, that is a result, not a failure:
    the report lists the question.
 
@@ -204,12 +224,24 @@ step 9 turns those lines into the report.
    ```bash
    cellq parent <n>
    ```
-   The output names the parent, its sub-issues and `all_closed`. If the
-   adapter takes a child rather than a parent (the output's `parent` is not
-   `<n>` with `sub_issues` empty, or it exits 1 saying the issue has no
-   parent), call it again with one of the parent's sub-issues, read from
-   `GET repos/<o>/<r>/issues/<n>/sub_issues` (reading is free). When
-   `all_closed` is true and `sub_issues` is not empty, the parent has been
+   A non-zero exit (the issue not found, no token) is not a skip: put its
+   stderr line in the report and list the issue as "needs converge".
+   The output is `{parent, sub_issues: [{number, closed}], all_closed}`
+   (the adapter contract): `parent` is the parent of `<n>` itself, or
+   `null` when it has none, and `sub_issues` are the children of `<n>`. A
+   parentless issue is not an error; the verb never exits 1 for one. Read
+   it as follows:
+   - `parent != null` and `sub_issues == []`: `<n>` is a child, not a
+     parent; skip it. Nothing is to be converged through it: `<n>` is
+     open, so its parent's `all_closed` is false for as long as `<n>` is,
+     and that parent is handled when it comes up in this loop itself or
+     when `cell-converge.yml` fires on it once `<n>` closes.
+   - `parent == null` and `sub_issues == []`: nothing was split from
+     `<n>` yet (a spec still awaited); skip it.
+   - `sub_issues` not empty and `all_closed` false: not the moment; skip
+     it.
+
+   When `all_closed` is true and `sub_issues` is not empty, the parent has been
    converged already if either exists: a fold PR, open or merged but not
    closed unmerged, labelled `proposal`, whose body closes or names the
    parent (`gh pr list --state open --label proposal --search "#<n>"`, then
@@ -242,7 +274,7 @@ step 9 turns those lines into the report.
    | Priorities rescored | <n> |
    | Dependencies linked | <n> |
    | Specs flagged for splitting (R7) | <n> |
-   | Issues routed from new | <n> (ready <n>, blocked <n>, needs-input <n>) |
+   | Issues routed from new or re-run from needs-input | <n> (ready <n>, blocked <n>, needs-input <n>) |
    | Parents converged | <n> (fold PRs <n>, gap issues <n>, needs converge <n>) |
 
    ### Drop candidates

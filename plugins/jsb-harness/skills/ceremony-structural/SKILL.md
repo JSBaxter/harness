@@ -9,7 +9,7 @@ Read the repository the way a new maintainer would, with CLAUDE.md, the
 ADRs and the specs in hand, and write down where the code has drifted from
 what those documents say, where one layer reaches into another, where
 something looks unsafe, and where a document says something the code
-contradicts. Each finding becomes one issue with a definition of done.
+contradicts. Each finding becomes one issue, filed into new for `scope`.
 Nothing is fixed here: the ceremony produces issues and a report, never a
 commit on the default branch and never a merge.
 
@@ -29,16 +29,18 @@ GitHub MCP write tool. Reading is free.
 
 1. **Open the ceremony issue and the rulebook.** Read the ceremony issue
    (`gh issue view <n> --json title,labels,state`): it must be open, carry
-   `source:ceremony`, and name the structural review; otherwise stop and
-   report what it is. Then read, in full, `CLAUDE.md`, every file in
+   `source:ceremony`, and its title must start `Ceremony: structural` (the
+   form the cell-ceremony workflow files); otherwise stop and report what
+   it is. Then read, in full, `CLAUDE.md`, every file in
    `docs/adr/` (an ADR marked superseded still matters: the superseding
    one says what replaced it), every spec in `specs/` and the README. List
    the conventions these state as one line each, with the file that states
    it; that list is what step 2 checks the code against. Read the previous
    structural report, if any (the most recently closed `source:ceremony`
-   issue whose title names the structural review; `cellq list --state done
-   --source ceremony`), so that a finding it already raised is not raised
-   twice.
+   issue whose title starts `Ceremony: structural`; `cellq list --state
+   done --source ceremony`, then by title; a finding a ceremony opened
+   carries the same label without the `Ceremony: ` prefix and is not one),
+   so that a finding it already raised is not raised twice.
 
 2. **The pass.** Walk the repository top down: the layout, then each
    top-level directory, then the files that other files depend on most.
@@ -85,51 +87,60 @@ GitHub MCP write tool. Reading is free.
    that the ceremony flags it and James decides.
 
 4. **One issue per finding.** For each finding from step 2, write a body
-   with the finding (where, what, which rule, how to check) and a
-   `## Definition of done` section in the form the `scope` skill writes:
-   inputs, outputs, files, sessions, specs, and acceptance statements an
-   agent with no other context can check, the first of which is that the
-   check from the finding no longer fails. Then open it and make it ready
-   through the adapter (the `scope` skill stops on `source:ceremony`, so
-   this ceremony scopes what it opens):
+   with the finding (where, what, which rule, how to check) and what
+   closing it looks like, concretely enough that `scope` can write the
+   definition of done from it without asking: the files the fix touches,
+   and the checks an agent with no other context can run, the first of
+   which is that the check from the finding no longer fails. Then open it
+   through the adapter and leave it in `new`:
    ```bash
    cellq idea "<kind>: <where> — <what>" --body <file> --source ceremony
-   cellq scope <n> --dod <dod-file> --route <small|spec> --priority <p>
    ```
-   The route is `small` unless the fix touches more files than
-   `cellq threshold route.spec_if.files_over` or needs more sessions than
-   `cellq threshold route.spec_if.sessions_over`; then it is `spec`, with
-   `--blocked "awaiting spec PR: specs/<area>.md"`. The priority is what
-   `scope` step 5 gives a `source:ceremony` issue: the default hint times
-   `cellq threshold edges.default`, rounded to the nearest integer, halves
-   up, clamped to the `priority:` range. A finding that calls an ADR into
-   question is still one issue, whose definition of done is a superseding
-   ADR through `/adr` rather than a code change.
+   Set no route, priority or state and write no `## Definition of done`
+   section: that is `scope`'s job, and it treats a `source:ceremony`
+   finding like any other issue (it skips only the ceremony issue itself,
+   the one whose title starts `Ceremony: `). `scope` reaches the issue
+   through grooming's routing of what is still new, by hand (`/scope
+   <n>`), or through the cell-scope workflow when its guard lets a
+   `source:ceremony` issue through. A finding that calls an ADR into
+   question is still one issue, whose body says that closing it is a
+   superseding ADR through `/adr` rather than a code change.
 
-   A finding where you can see the smell but not the fix still gets a
-   definition of done and goes ready: its first acceptance statement is
-   that the question which settles it is answered in the issue body with
-   the evidence (the agent that claims it investigates first), and the
-   rest describe the fix conditional on that answer. Do not park a
-   ceremony-opened issue in `needs-input`: `scope` stops on
-   `source:ceremony`, so nothing in the cell would ever move it on when
-   James answers. A question for James goes in the report instead.
+   A finding where you can see the smell but not the fix is still a task,
+   not a question: say in the body that the first thing closing it means
+   is the question which settles it answered in the issue with the
+   evidence (the agent that claims it investigates first), and describe
+   the fix conditional on that answer. A finding that cannot be stated
+   without an answer only James can give is not filed: it goes in the
+   report, under "Questions for James", with the finding it bears on, so
+   that `scope` is not the one left to ask it; James files it, or answers
+   there and the next structural review files it.
 
 5. **The sibling-cell candidate.** When step 3 found a second purpose and
    no open issue already names it, open one issue titled exactly
    `Sibling-cell candidate: <purpose>` whose body gives the evidence from
    step 3, which specs and directories would move, and what the dependency
-   between the two cells would become as a cross-cell request. It carries
-   no definition of done: splitting is James's decision, not an agent's
-   task, and the issue is his decision record. It is the one issue this
-   ceremony leaves in `needs-input`, on purpose: nothing in the cell moves
-   it on; James closes it as not planned, or births the sibling (the
-   project-creation path) and closes it when the moved capability's spec
-   is marked superseded here.
+   between the two cells would become as a cross-cell request. It is not
+   a task: splitting is James's decision, not an agent's work, and the
+   issue is his decision record. So it is the one issue this ceremony
+   does not leave in new for `scope`; it goes to `blocked`, with the
+   question as the reason, on purpose. `scope` stops on a blocked issue
+   (step 1 there: a state other than new or needs-input), the cell-scope
+   re-run fires only on `needs-input`, and grooming never rescores or
+   routes a blocked issue, so nothing in the cell moves it on; James
+   closes it as not planned, or births the sibling (the project-creation
+   path) and closes it when the moved capability's spec is marked
+   superseded here. It appears in grooming's drop candidates once a
+   period passes untouched, which is the reminder.
    ```bash
    cellq idea "Sibling-cell candidate: <purpose>" --body <file> --source ceremony
-   cellq state <n> needs-input --reason "Split <purpose> into a sibling cell?"
+   cellq state <n> blocked --reason "James's decision: split <purpose> into a sibling cell?"
    ```
+   The two calls belong together, issued back to back so the issue is in
+   `new` for as short a time as possible: if the second fails, repeat it
+   before doing anything else, and if it keeps failing say so in the
+   report with the issue number, because a decision record left in `new`
+   is what grooming's routing step would next hand to `scope` as a task.
 
 6. **Report and close.** Post the report as a comment on the ceremony
    issue (a comment is not state: `gh issue comment <n> --body-file
@@ -151,11 +162,17 @@ GitHub MCP write tool. Reading is free.
    | Sibling-cell candidate | yes: <purpose> / no | <n> | <n> |
 
    ### Findings
-   - #<n> <title> — <where>; rule: <file and line, or ADR>; route <r>, priority <p>
+   - #<n> <title> — <where>; rule: <file and line, or ADR>; in new for `scope`
    - (already open as #<m>) <title>
 
    ### Not raised
    - <what was looked at and found sound, one line each area>
+
+   ### Questions for James
+   - <a question only he can answer, with the finding it bears on> | none
+
+   Sibling-cell candidate: #<n> (blocked, awaiting James) | #<n> (in new: the
+   blocked move failed) | none
    ```
 
    "Not raised" matters: a pass that found nothing in an area says the
