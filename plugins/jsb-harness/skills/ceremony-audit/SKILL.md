@@ -199,8 +199,10 @@ resumes at step 3 from that agenda.
 ## Short form after a fold
 
 The full walk runs on the ceremony's period. The short form runs on one
-capability, the one a fold PR just moved from Pending changes into
-Behavior, and it lives on that fold PR: `converge` step 6 opens the thread
+capability, the one a fold PR just moved out of Pending changes (behaviour
+into Behavior, each statement naming its test; documentation, process and
+convention into Constraints, Non-goals, the README or an ADR), and it lives
+on that fold PR: `converge` step 6 opens the thread
 there, so the audit is attached to the thing James is about to merge and
 there is no separate issue. The same three levels, in the same order, but
 only about that capability: what it offers and whether its criteria are

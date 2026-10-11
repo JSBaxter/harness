@@ -65,8 +65,13 @@ skill depends on a YAML library.
 changed Behavior statement with its test name. Written by `ship`, read by
 the reviewer.
 
-**Converge evidence**: one line per criterion, `PASS|FAIL <criterion> —
-<evidence>`, in the fold PR body or the gap issue body.
+**Converge evidence**: one line per criterion, and per claim in What
+changes that no criterion covers, `PASS|FAIL <criterion> — <evidence>`: for
+behaviour, a test name and its result (a command's output or a file and
+line is a check, not a test, and never makes a `PASS` on its own); for
+documentation, process or convention, the file and line, or the search
+that found nothing. The same lines go in the fold PR body, the gap issue
+body and the session's reply.
 
 **Session start from a workflow**: each reusable workflow invokes
 `anthropics/claude-code-action` with `claude_code_oauth_token` and a prompt
