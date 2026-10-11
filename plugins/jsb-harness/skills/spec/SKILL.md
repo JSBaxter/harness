@@ -29,16 +29,34 @@ Status: draft | active | superseded by <file>
 One paragraph: what this exists to do, for whom.
 
 ## Behavior
-The contract. Bullet points, each independently testable where possible.
+The contract. Bullet points, each independently testable where possible;
+each names its test (`— test: <name>`) once one exists.
+
+## Acceptance criteria
+Executable by an agent with no other context: inputs, observable outputs.
 
 ## Non-goals
 Things deliberately not done. Prevents scope creep by future agents.
 
+## Constraints
+What any implementation must respect (platform, budget, existing ADRs).
+
+## Open questions
+Numbered, each with a default. `none` when there are none.
+
 ## Pending changes
 ### <change-name> (<date>)
-Delta: what changes / what stays / what's removed.
+What changes: ...
+What stays: ...
+What is removed: ...
 Acceptance criteria: ...
-Linked issues: #NN
+Non-goals: ...
+Constraints: ...
+Open questions: ...
+Linked issue: #NN
+
+(A new spec has no delta: Pending changes says so, and a `Linked issue: #NN`
+line sits under it. /split-spec then checks the top-level sections above.)
 
 ## Decisions
 Links to relevant ADRs: [[docs/adr/NNNN-*.md]]
@@ -78,6 +96,13 @@ residual-stream-viz first iteration).
    describe how in-flight work is being built and get retired when it lands.)
 2. If the user described a change to existing behavior, write it under
    **Pending changes** as a delta; don't rewrite the body until the change lands.
+   A delta carries all eight headed fields, each starting its own line with
+   the field name and a colon: **What changes**, **What stays**, **What is
+   removed**, **Acceptance criteria**, **Non-goals**, **Constraints**, **Open
+   questions**, **Linked issue**. A field with nothing to say reads `none`
+   (`Open questions: none`); it is never omitted. `/split-spec` runs a
+   completeness check before its splitter and refuses a delta missing any
+   of them, naming the field, so an incomplete delta cannot be decomposed.
 3. Say what comes next, and that it comes *after* James merges the spec PR:
    /plan when the approach involves a real choice (multiple components, a
    dependency or interface being picked, parallel dispatch ahead), then
