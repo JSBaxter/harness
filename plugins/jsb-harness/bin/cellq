@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -24,7 +25,6 @@ VERBS = [
     "idea", "scope", "claim", "complete", "state", "depend", "link",
     "request-feature", "ready", "list", "parent", "merged-count", "threshold",
 ]
-STUBS = {"ready", "list", "parent"}
 STATES = [
     "new", "needs-input", "ready", "blocked", "in-progress", "in-review",
     "done", "dropped",
@@ -43,6 +43,9 @@ DOD_TITLE = "Definition of done"
 # section, so one also ends the section that precedes it.
 CONVENTION_LINE = re.compile(r"(Depends on|Parent):.*")
 DEPENDS_LINE = re.compile(r"Depends on:.*")
+PARENT_LINE = re.compile(r"Parent: #(\d+)[ \t]*")
+CLAIM_COMMENT = re.compile(r"claimed by (.+?) at (\S+)[ \t]*\r?\n?")
+PAGE = 100  # GitHub's largest per_page
 
 
 class Failure(Exception):
@@ -110,6 +113,20 @@ class GitHub:
         """One REST call under /repos/{o}/{r}; returns the parsed JSON body
         (None when empty). Raises Failure on any HTTP or network error."""
         return self.request(method, f"{self.base}/repos/{self.repo}{path}", body)
+
+    def pages(self, path, **params):
+        """Every item of a paginated listing under /repos/{o}/{r}, in the
+        order GitHub returns them; stops at the first short page."""
+        items, page = [], 1
+        while True:
+            query = urllib.parse.urlencode({**params, "per_page": PAGE, "page": page})
+            got = self.call("GET", f"{path}?{query}")
+            if not isinstance(got, list):
+                raise Failure(f"GET {path}: response is not a list")
+            items.extend(got)
+            if len(got) < PAGE:
+                return items
+            page += 1
 
     def request(self, method, url, body=None):
         """One REST call to an absolute URL (for endpoints outside /repos)."""
@@ -540,30 +557,203 @@ def scalar(s):
     return s
 
 
-def cmd_threshold(_gh, a):
-    path = a.file
+def load_thresholds(path=None, hint=""):
+    """(parsed thresholds.yml, its path). Default path: the git toplevel of
+    the current directory. A missing file exits 1 naming it."""
     if not path:
         try:
             top = subprocess.run(["git", "rev-parse", "--show-toplevel"],
                                  capture_output=True, text=True, check=True).stdout.strip()
         except (OSError, subprocess.CalledProcessError):
-            raise Failure("thresholds.yml: not inside a git repository and no --file given")
+            raise Failure(f"thresholds.yml: not inside a git repository{hint}")
         path = os.path.join(top, "thresholds.yml")
     try:
         with open(path, encoding="utf-8") as f:
-            data = parse_yaml_subset(f.read(), path)
+            return parse_yaml_subset(f.read(), path), path
     except FileNotFoundError:
         raise Failure(f"thresholds file not found: {path}")
     except (OSError, UnicodeDecodeError) as e:
         raise Failure(f"cannot read thresholds file {path}: {getattr(e, 'strerror', None) or e}")
+
+
+def threshold_value(data, path, key):
+    """The scalar at dotted `key`; a missing key or a mapping exits 1 naming it."""
     node = data
-    for part in a.key.split("."):
+    for part in key.split("."):
         if not isinstance(node, dict) or part not in node:
-            raise Failure(f"threshold key not found: {a.key} in {path}")
+            raise Failure(f"threshold key not found: {key} in {path}")
         node = node[part]
     if isinstance(node, dict):
-        raise Failure(f"threshold key is not a scalar: {a.key} in {path}")
+        raise Failure(f"threshold key is not a scalar: {key} in {path}")
     return node
+
+
+def cmd_threshold(_gh, a):
+    data, path = load_thresholds(a.file, " and no --file given")
+    return threshold_value(data, path, a.key)
+
+
+# ------------------------------------------------------------------ read verbs
+
+def label_value(issue, group):
+    """The value of the issue's `group:` label, or None when it has none."""
+    for label in issue["labels"]:
+        if label["name"].startswith(group + ":"):
+            return label["name"][len(group) + 1:]
+    return None
+
+
+def issue_number(url):
+    m = re.search(r"/issues/(\d+)$", url or "")
+    return int(m.group(1)) if m else None
+
+
+def parent_line(body):
+    """The number on the body's `Parent: #n` line, outside any code fence,
+    or None. The line is `link`'s fallback when the sub-issue endpoints
+    are unavailable (the plan's risk table), so it is read here too."""
+    for _, line in prose_lines(body.splitlines()):
+        m = PARENT_LINE.fullmatch(line)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def parent_of(gh, issue):
+    """The parent issue number, or None. Issue JSON carries parent_issue_url
+    only when the issue has a sub-issue parent, so that answers without a
+    call; without the key, GET /issues/{n}/parent is asked. GitHub answers
+    404 both for an issue with no parent and when the endpoint itself is
+    not served (a proxy), so either way the `Parent: #n` body line is the
+    fallback, as it is for `link`."""
+    if "parent_issue_url" in issue:
+        number = issue_number(issue["parent_issue_url"])
+    else:
+        try:
+            number = gh.call("GET", f"/issues/{issue['number']}/parent")["number"]
+        except HTTPFailure as e:
+            if e.status not in (404, 410):
+                raise
+            number = None
+    return number if number is not None else parent_line(issue.get("body") or "")
+
+
+def claim_of(gh, issue):
+    """(claimed_by, claimed_at) from the latest `claimed by <ref> at <time>`
+    comment, or (None, None). Comments arrive oldest first."""
+    found = (None, None)
+    if issue.get("comments", 1):
+        for comment in gh.pages(f"/issues/{issue['number']}/comments"):
+            m = CLAIM_COMMENT.fullmatch(comment.get("body") or "")
+            if m:
+                found = (m.group(1), m.group(2))
+    return found
+
+
+def list_issues(gh, state, labels):
+    """Open issues, or closed ones for state done/dropped, carrying every
+    label in `labels`; pull requests, which the endpoint also lists, are
+    dropped. The labels are matched here, not with the endpoint's `labels`
+    parameter: that filter is served from an index that lags a fresh label
+    by seconds, so `ready` right after `scope` would miss the issue."""
+    gh_state = "closed" if state in ("done", "dropped") else "open"
+    wanted = set(labels)
+    return [i for i in gh.pages("/issues", state=gh_state)
+            if "pull_request" not in i and wanted <= {l["name"] for l in i["labels"]}]
+
+
+def cmd_list(gh, a):
+    labels = []
+    for group, value in (("state", a.state), ("route", a.route), ("source", a.source)):
+        if value is not None:
+            labels.append(validate_label(group, value))
+    rows = []
+    for issue in list_issues(gh, a.state, labels):
+        priority = label_value(issue, "priority")
+        claimed_by, claimed_at = claim_of(gh, issue)
+        rows.append({
+            "number": issue["number"],
+            "title": issue["title"],
+            "state": label_value(issue, "state"),
+            "route": label_value(issue, "route"),
+            "source": label_value(issue, "source"),
+            "priority": int(priority) if priority and priority.isdigit() else None,
+            "created_at": issue["created_at"],
+            "claimed_by": claimed_by,
+            "claimed_at": claimed_at,
+            "depends_on": depends_on(issue.get("body") or ""),
+            "parent": parent_of(gh, issue),
+        })
+    return rows
+
+
+def cmd_parent(gh, a):
+    issue = gh.call("GET", f"/issues/{a.number}")  # a bad number fails here, clearly
+    try:
+        subs = gh.pages(f"/issues/{a.number}/sub_issues")
+    except HTTPFailure as e:
+        if e.status not in (404, 410):
+            raise
+        # The sub-issue endpoints are unavailable (a proxy that does not
+        # serve them): the children are the issues whose body carries the
+        # `Parent: #n` line that `link` writes in that case.
+        subs = [i for i in gh.pages("/issues", state="all")
+                if "pull_request" not in i and parent_line(i.get("body") or "") == a.number]
+    sub_issues = [{"number": s["number"], "closed": s["state"] == "closed"} for s in subs]
+    return {"parent": parent_of(gh, issue), "sub_issues": sub_issues,
+            "all_closed": all(s["closed"] for s in sub_issues)}
+
+
+def edge_weight(data, path, source):
+    """The arriving edge's weight for a `source:` value (specs/cellq.md,
+    Ready ranking). No source label is read as `own`."""
+    if source is None or source == "own":
+        return threshold_value(data, path, "edges.self")
+    if source.startswith("cell:"):
+        cell = source[len("cell:"):]
+        edges = data.get("edges")
+        if isinstance(edges, dict) and cell in edges and not isinstance(edges[cell], dict):
+            return edges[cell]
+    return threshold_value(data, path, "edges.default")
+
+
+def cmd_ready(gh, _a):
+    data, path = load_thresholds()
+    closed = {}  # dependency number -> is closed; each dependency fetched once
+
+    def is_closed(number):
+        if number not in closed:
+            try:
+                closed[number] = gh.call("GET", f"/issues/{number}")["state"] == "closed"
+            except HTTPFailure as e:
+                if e.status != 404:
+                    raise
+                closed[number] = False  # a dependency that does not exist is unmet
+        return closed[number]
+
+    rows = []
+    for issue in list_issues(gh, "ready", ["state:ready"]):
+        if not all(is_closed(n) for n in depends_on(issue.get("body") or "")):
+            continue
+        source = label_value(issue, "source")
+        weight = edge_weight(data, path, source)
+        if not isinstance(weight, (int, float)):
+            raise Failure(f"edge weight for source {source or 'own'} is not a number in {path}: {weight!r}")
+        priority = label_value(issue, "priority")
+        priority = int(priority) if priority and priority.isdigit() else None
+        rows.append({
+            "number": issue["number"],
+            "title": issue["title"],
+            "priority": priority,
+            "source": source,
+            "weight": weight,
+            # No priority: label (an issue filed ready by hand or by a
+            # ceremony) scores nothing and sorts last rather than hiding.
+            "score": (priority or 0) * weight,
+            "created_at": issue["created_at"],
+        })
+    rows.sort(key=lambda r: (-r["score"], r["created_at"], r["number"]))
+    return rows
 
 
 # ------------------------------------------------------------------------ main
@@ -635,16 +825,24 @@ def build_parser():
     s.add_argument("--file", metavar="path")
     s.set_defaults(fn=cmd_threshold, offline=True)
 
-    for verb in sorted(STUBS):
-        sub.add_parser(verb, parents=[common])
+    s = sub.add_parser("ready", parents=[common])
+    s.set_defaults(fn=cmd_ready)
+
+    s = sub.add_parser("list", parents=[common])
+    s.add_argument("--state")
+    s.add_argument("--route")
+    s.add_argument("--source")
+    s.set_defaults(fn=cmd_list)
+
+    s = sub.add_parser("parent", parents=[common])
+    s.add_argument("number", type=int)
+    s.set_defaults(fn=cmd_parent)
     return p
 
 
 def main(argv):
     try:
         verb = argv[1] if len(argv) > 1 else None
-        if verb in STUBS:
-            raise UsageError(f"{verb}: not implemented")
         if verb is None:
             raise UsageError(f"usage: cellq <verb> [args] [--repo o/r]; verbs: {', '.join(VERBS)}")
         if verb not in VERBS and verb not in ("-h", "--help"):
