@@ -57,6 +57,12 @@ We will adopt option 2.
    delivers one markdown file, the reviewer, which is prose and so falls
    under decision 4. Accepted as a second hop that carries no executable
    CI.
+
+   > **Note (2026-10-11):** replaced by ADR 0010. The harness is public
+   > now (#63), so the reusable workflows check it out at
+   > `job.workflow_sha` and run the actions from that checkout; the hop is
+   > pinned to the same commit as the workflow. Decisions 1, 2, 4 and 5
+   > stand.
 4. **Skills stay unpinned**, as ADR 0003 decided. That part carries over
    unchanged and remains a deliberate exception to standard practice: a
    skill is prose, a bad one shows up in the next PR, and one commit
