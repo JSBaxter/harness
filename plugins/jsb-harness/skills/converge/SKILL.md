@@ -111,9 +111,12 @@ absent).
    origin/<default>` work in place; if not, add the worktree as above.)
    Read CLAUDE.md there for the test command. The list to evaluate is
    every line under the delta's `Acceptance criteria`, and after them
-   each claim in **What changes** about what the software does that no
-   criterion covers (nothing enters Behavior without a test, step 3, so
-   such a claim is checked for one here): the criteria are what the delta
+   each claim about what the software does that no criterion covers: in
+   **What changes** for a delta entry, in the written `## Behavior` for a
+   new spec (nothing enters or stays in Behavior without a test, step 3,
+   so such a claim is checked for one here). Cut each claim whole, as the
+   delta's own sentence or list item, so a later run cuts it the same and
+   step 4's title search finds its gap. The criteria are what the delta
    promised, the uncovered claims are what it described, and the
    fold-or-gap decision below turns on all of them. For each, decide pass
    or fail and keep the evidence: for a behaviour criterion or claim, a
@@ -162,10 +165,10 @@ absent).
      tests/` returned nothing), then what a command showed if you ran one;
      the gap it opens (step 4) is read as a request for the test. Writing
      the missing test is a fix, and fixes are not this skill's work (step
-     5). An uncovered What-changes claim is evaluated the same way: its
-     test is the one the search finds, and when none asserts it, its gap
-     is closed by a test, or by editing the delta to drop the claim or
-     move it out of What changes.
+     5). An uncovered claim is evaluated the same way: its test is the
+     one the search finds, and when none asserts it, its gap is closed by
+     a test, or by editing the delta to drop the claim or move it out of
+     What changes (or out of a new spec's Behavior).
    - A criterion about documentation, process or convention (a file says,
      contains or names something; a step a person takes by hand; a name
      or layout that holds) passes on the file and line that shows it, or,
@@ -212,8 +215,10 @@ absent).
        something the cell will not do into `## Non-goals`; what a reader
        of the repository needs into the README; a decision worth
        remembering into an ADR under `docs/adr/`, in the `adr` skill's
-       form (take its template only, not its other steps, and link the
-       new file from the spec's `## Decisions`). The PR body lists each
+       form, filed `accepted` because a merged `proposal` PR is the
+       acceptance (that skill's step 5 exception), and linked from the
+       spec's `## Decisions`; take nothing else from that skill. The PR
+       body lists each
        such item and where it went under `## Outside Behavior`.
    - For a new spec, Behavior is already written: add the `— test:` ending
      to each statement a criterion covers, and to each behaviour
@@ -283,7 +288,7 @@ absent).
    this form:
    ```markdown
    Gap found by converge on #<n> (parent). The criterion (or uncovered
-   What-changes claim) in the title
+   claim) in the title
    failed against origin/<default> at <short sha>; the delta `<delta name>`
    in `specs/<area>.md` stays in Pending changes until this closes.
 
@@ -297,8 +302,8 @@ absent).
    When the criterion failed for want of a test, say so under
    `## Suggested fix` (step 5): which test to write and where, so the gap
    reads as a request for a test, not for a code change; for an uncovered
-   What-changes claim, also that editing the delta to drop or move the
-   claim closes it.
+   claim, also that editing the delta to drop or move the claim closes
+   it.
    Before filing, look for an earlier gap with the same title: `gh issue
    list --state all --search "<words> in:title" --json
    number,title,state,labels`, where `<words>` are the criterion's words

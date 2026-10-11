@@ -209,8 +209,9 @@ those lines into the report.
    closing `cellq state <n> in-review` is never run, because any state
    set on a closed issue reopens it (the adapter contract) and nothing
    would close it again.
-   Evaluate every criterion exactly as `converge` step 2 says (one `PASS`
-   or `FAIL` line each, real evidence, nothing partial). All pass: keep
+   Evaluate every criterion, and every uncovered claim, exactly as
+   `converge` step 2 says (one `PASS` or `FAIL` line each, real evidence,
+   nothing partial). All pass: keep
    the fold edits from `converge` step 3 for the spec branch of step 6,
    with the evidence lines for the PR body. Any fail: open the gap issue
    exactly as `converge` step 4 does (`cellq idea "Gap: <criterion>"
@@ -229,8 +230,10 @@ those lines into the report.
      rule the cell holds to), its `## Non-goals` (something the cell will
      not do), the README (what a reader of the repository needs), or a new
      ADR under `docs/adr/` in the `adr` skill's form (a decision worth
-     remembering; take the template only, and link the file from the
-     spec's `## Decisions`). No issue; the report lists it as moved, with
+     remembering), filed `accepted` because a merged `proposal` PR is the
+     acceptance (that skill's step 5 exception) and linked from the
+     spec's `## Decisions`; take nothing else from that skill. No issue;
+     the report lists it as moved, with
      the PR as its action, or `in progress: #<parent>` for a draft spec
      being built (step 3), for which nothing is proposed.
    - **Dead**: as an edit kept for the spec branch of step 6, delete the
@@ -306,8 +309,9 @@ those lines into the report.
    item, `README.md` or `docs/adr/`) and nothing else, commit, push, open
    the PR, and only then the next spec's branch, so no spec's edits sit
    uncommitted when another branch is cut. `git status` must show only
-   that spec file and any README or ADR a move touched; if it shows
-   anything else, revert it before committing. Commit as
+   that spec file and any README or ADR a move or a fold's routed item
+   touched; if it shows anything else, revert it before committing.
+   Commit as
    `docs(spec): health <spec-name> — fold, prune, name tests, move` (keep only
    the parts that apply), with a body saying why: the ceremony issue, the
    commit checked, and one line per change. Push the branch (never the

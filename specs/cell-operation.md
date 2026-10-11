@@ -124,10 +124,12 @@ Runs in a fresh session when the last sub-issue of a parent closes.
    UI appearance, a screenshot comparison); a command's output or a file
    and line is evidence of a check, not a test, and a behaviour criterion
    with no test fails. A criterion about documentation, process or
-   convention passes on the file and line that shows it. A What-changes
-   claim about what the software does that no criterion covers is checked
-   for a test the same way, so nothing enters Behavior without one.
-3. All pass: opens a docs-only PR with the `proposal` label that deletes
+   convention passes on the file and line that shows it. A claim about
+   what the software does that no criterion covers (in What changes, or
+   in a new spec's Behavior) is checked for a test the same way, so
+   nothing enters Behavior without one.
+3. Every criterion and uncovered claim passes: opens a docs-only PR with
+   the `proposal` label that deletes
    the delta from Pending changes and moves its content out: what the
    software does into Behavior, each statement naming its test;
    documentation, process or convention into Constraints, Non-goals, the
@@ -200,11 +202,15 @@ rendered from the project template.
   spec.
 - `split-spec` on a delta lacking non-goals: stops before the splitter
   runs and names the missing field; no issues are created.
-- `converge` when every criterion passes: one open PR, labelled
-  `proposal`, whose diff removes the delta from Pending changes and adds
-  its behaviour content to Behavior, each statement naming a test; any
-  documentation, process or convention content is in Constraints,
-  Non-goals, the README or an ADR with no test line; no gap issue.
+- `converge` when every criterion passes and every What-changes claim no
+  criterion covers has a test: one open PR, labelled `proposal`, whose
+  diff removes the delta from Pending changes and adds its behaviour
+  content to Behavior, each statement naming a test; any documentation,
+  process or convention content is in Constraints, Non-goals, the README
+  or an ADR with no test line; no gap issue.
+- `converge` when every criterion passes but a What-changes claim no
+  criterion covers has no test: one open gap issue naming the claim and
+  the missing test; the delta unchanged; no PR.
 - `converge` when one criterion fails: one open gap issue naming the
   criterion and its evidence; the delta unchanged; no PR.
 - `converge` on a behaviour criterion whose only evidence is a command's
