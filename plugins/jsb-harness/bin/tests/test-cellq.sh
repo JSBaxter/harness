@@ -211,6 +211,8 @@ else
   d=$(cq idea "cellq test depend" | jq -r .number); created+=("$d")
   expect_rc 1 depend "$d" "$d" --repo "$R"                                 # self
   expect_rc 1 depend "$d" 999999 --repo "$R"                               # missing target
+  pr=$(api "pulls?state=all&per_page=1" --jq '.[0].number // empty')
+  [ -n "$pr" ] && expect_rc 1 depend "$d" "$pr" --repo "$R"                 # a pull request is not an issue
   expect_out "{\"number\": $d, \"depends_on\": [$s]}" depend "$d" "$s" --repo "$R"
   expect_out "{\"number\": $d, \"depends_on\": [$s]}" depend "$d" "$s" --repo "$R"   # idempotent
   [ "$(body_of "$d" | grep -c "^Depends on:")" -eq 1 ] && ok || bad "depend left more than one line"

@@ -251,6 +251,8 @@ def prose_lines(lines):
     fence = None
     for i, line in enumerate(lines):
         m = re.match(r"[ \t]*(`{3,}|~{3,})", line)
+        if m and m.group(1)[0] == "`" and "`" in line[m.end():]:
+            m = None  # inline code at line start, not a fence (CommonMark)
         if m and (fence is None or m.group(1)[0] == fence):
             fence = None if fence else m.group(1)[0]
         elif fence is None:
@@ -401,7 +403,9 @@ def cmd_depend(gh, a):
     if a.number == a.target:
         raise Failure(f"issue #{a.number} cannot depend on itself")
     issue = gh.call("GET", f"/issues/{a.number}")
-    gh.call("GET", f"/issues/{a.target}")  # a dependency must exist here
+    target = gh.call("GET", f"/issues/{a.target}")  # a dependency must exist here
+    if "pull_request" in target:
+        raise Failure(f"#{a.target} is a pull request, not an issue")
     body = issue.get("body") or ""
     numbers = depends_on(body)
     if a.target not in numbers:
