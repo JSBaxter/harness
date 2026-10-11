@@ -26,11 +26,14 @@ Review against, in priority order:
 6. **Spec behaviour** — three checks; each is an Important finding when it
    fails, and the finding names the spec file and the statement.
    (a) The diff changes behaviour that a Behavior statement in a `specs/*.md`
-       file describes, and that spec file is not in the diff. Find the
-       statements by reading the `## Behavior` section of every spec that
-       names the diff's subject (grep `specs/` for the changed module,
-       command, flag or file); then ask of each statement whether the diff
-       makes it false or changes what it promises.
+       file describes, and that statement is not edited in the same diff.
+       The spec file appearing in the diff for some other edit (an open
+       question settled, a non-goal added) does not satisfy this; the
+       statement itself must change. Find the statements by reading the
+       `## Behavior` section of every spec that names the diff's subject
+       (grep `specs/` for the changed module, command, flag or file); then
+       ask of each statement whether the diff makes it false or changes
+       what it promises.
    (b) A Behavior statement the diff changes or adds, or whose described
        behaviour the diff changes, names no test, or names a test that does
        not assert it. A statement names its test as `— test: <name>` or
@@ -38,9 +41,9 @@ Review against, in priority order:
        since a matching name is not evidence, and a deleted or inverted
        test counts as none.
    (c) The PR body's `## Spec changes` section disagrees with the diff: it
-       says `none` while the diff changes a statement in the `## Behavior`
-       section of a `specs/*.md` file; it lists a statement the diff does not
-       change; or the section is missing. Spec edits outside `## Behavior`
+       says `none` while the diff changes or adds a statement in the
+       `## Behavior` section of a `specs/*.md` file; it lists a statement the
+       diff does not change or add; or the section is missing. Spec edits outside `## Behavior`
        (open questions, non-goals, decisions) do not make `none` wrong. A
        `none` that agrees with the diff is still wrong when (a) fails; report
        that under (a). Read the body with

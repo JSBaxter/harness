@@ -35,8 +35,10 @@ through it too, never with raw `gh issue edit`.
    Fix Important findings, rerun tests, re-review until the reviewer approves
    or `cellq threshold review.max_rounds` rounds have run, whichever comes
    first — if the bound is hit, note the outstanding and disputed findings in
-   the PR body for the human. Give the reviewer the draft PR body (step 9),
-   because its spec-behaviour check reads the `## Spec changes` section.
+   the PR body for the human. Before the first round, draft the PR body's
+   `## Spec changes` section (the form is in step 9: `none`, or one line per
+   Behavior statement the diff changes or adds) and hand it to the reviewer
+   with the diff, because its spec-behaviour check reads that section.
 5. **ADR check** — did this work establish a new convention or make a real
    choice? If yes, run /adr before opening the PR.
 6. **Commit hygiene** — commits should be small and each message follows

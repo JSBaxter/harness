@@ -53,18 +53,21 @@ never with raw `gh` issue writes.
      }' specs/<file>
    ```
    The one exception is a new spec: its Pending changes has no `###` entry
-   (it says the spec is new) and its Behavior is the whole contract, so
-   check the top-level sections instead. `## Behavior` stands in for the
-   three "What" fields; the rest are `##` sections and a `Linked issue:`
-   line:
+   (it says the spec is new) and its Behavior is the whole contract, so run
+   this check on the top-level sections instead of the one above (exactly
+   one of the two runs, chosen by whether a `###` entry exists).
+   `## Behavior` stands in for the three "What" fields; the rest are `##`
+   sections and a `Linked issue:` line:
    ```bash
    for f in "## Behavior" "## Acceptance criteria" "## Non-goals" \
             "## Constraints" "## Open questions" "Linked issue:"; do
-     grep -q "^$f" specs/<file> || echo "Incomplete delta: missing ${f#\#\# }"
+     name=${f#\#\# }; name=${name%:}
+     grep -q "^$f" specs/<file> || echo "Incomplete delta: missing $name"
    done
    ```
-   If either check printed anything, stop: do not invoke spec-splitter and
-   file no issues. Send the spec back through /spec to complete it.
+   If the check that ran printed anything, stop: do not invoke
+   spec-splitter and file no issues. Send the spec back through /spec to
+   complete it.
 2. Invoke the **spec-splitter** agent with the spec content and the three
    sizing values from the rule below. It returns an assessment, ordered task
    list with acceptance criteria and dependencies, a parallelism map, and any
