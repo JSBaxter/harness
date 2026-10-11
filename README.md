@@ -59,6 +59,7 @@ else. Every environment resolves the same source:
 | `plugins/jsb-harness/hooks/` | PreToolUse guard against direct pushes to main |
 | `settings/settings.json` | Shared settings: agent teams on, worktree defaults, safe-command allowlist |
 | `templates/project/` | Contents for the GitHub **template repo**: CLAUDE.md, review workflow, ruleset, ADR seed, specs scaffold |
+| `.github/workflows/template-sync.yml` | Reusable template sync: a cell's scheduled stub calls it; it runs `copier update` against stem-cell in the cell's own Actions and opens one PR on `template-sync` with the version comparison, changed paths, conflicts, owned files and shape notes (stem-cell ADR 0002) |
 | `routines/` | Prompt templates for Claude Code Routines (cloud sessions on GitHub events) |
 | `docs/cloud-capabilities.md` | Verified matrix of what a cloud session, an in-repo workflow and a local session can each do against GitHub |
 | `identities/` | Multi-account machinery: directory = identity; real values live only in local untracked files (see `identities/README.md`) |

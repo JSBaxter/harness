@@ -1,0 +1,322 @@
+# Template sync: keep a rendered cell current with its template (stem-cell) by
+# running `copier update` inside the cell's own Actions and opening one PR.
+#
+# This is the REUSABLE core (on: workflow_call). Cells do NOT copy it; each
+# carries a pinned caller stub rendered by stem-cell
+# (template/.github/workflows/template-sync.yml.jinja) that `uses:` this file
+# at a commit SHA, so logic changes here reach every cell through a Renovate
+# bump PR (ADR 0001, 0006). That the sync pulls from inside the cell, instead
+# of the harness or stem-cell pushing into every cell with a cross-repo
+# credential, is stem-cell ADR 0002 (docs/adr/0002-sync-runs-in-the-cell.md
+# there).
+#
+# What the caller stub must provide (a called workflow is capped at the
+# caller's token scopes, so it fails to start without these):
+#   on: schedule (weekly by default) and workflow_dispatch
+#   permissions: contents: write, pull-requests: write
+#   secrets: inherit
+# and the cell's repository setting "Allow GitHub Actions to create and
+# approve pull requests" (Settings > Actions > General) must be on, or
+# create-pull-request fails with GITHUB_TOKEN: "GitHub Actions is not
+# permitted to create or approve pull requests".
+#
+# Design notes (don't simplify these away):
+# - One branch per cell, `template-sync`, force-updated by every run; the PR
+#   is reused while open, so running twice updates it rather than opening a
+#   second. The default branch is never pushed to: the only push in this file
+#   is create-pull-request's, to `template-sync`.
+# - The cell's template version is what copier recorded in
+#   `.copier-answers.yml` (`_commit`). The latest is the highest stable
+#   `vMAJOR.MINOR.PATCH` tag on the template, the ref `copier update` picks
+#   when no `--vcs-ref` is given (prereleases skipped); with no tag at all
+#   copier uses HEAD, so HEAD's short SHA is reported, the form copier writes.
+# - `copier update --conflict rej` leaves a `.rej` file beside anything it
+#   cannot merge instead of inline markers, so the PR stays a reviewable diff
+#   with the conflict committed next to it. Conflicts and a copier failure are
+#   reported by failing the job AFTER the PR is opened, so the red run sits on
+#   the PR rather than on a schedule run nobody reads.
+# - Cell-owned paths (`_skip_if_exists` in the template's copier.yml) are
+#   never overwritten; a template change to their shape arrives as the quoted
+#   `CHANGES.md` sections in the PR body under "Shape notes". The PR body has
+#   exactly five `##` sections, in the order the cell-skeleton spec fixes, so
+#   the quoted release notes are blockquoted to keep their own headings from
+#   reading as a sixth.
+# - A PR opened with GITHUB_TOKEN fires no other workflow, so the review gate
+#   runs on it only after a human pushes (stem-cell ADR 0002, consequences).
+#   James reviews and merges it like any PR.
+# - Nothing here is tuned per cell: no numeric threshold lives in this file.
+name: Template Sync (reusable)
+
+on:
+  workflow_call:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: copier update works on the cell's git state, and
+          # create-pull-request diffs the sync branch against the base.
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Read the template lineage
+        id: lineage
+        run: |
+          answers=.copier-answers.yml
+          if [ ! -f "$answers" ]; then
+            echo "::error::$answers not found: this repository was not rendered by copier, nothing to sync"
+            exit 1
+          fi
+          # Top-level scalar, quoted or not; copier writes both keys flat.
+          read_answer() {
+            sed -nE "s/^$1:[[:space:]]*//p" "$answers" | head -n1 \
+              | sed -E "s/^(['\"])(.*)\1\$/\2/"
+          }
+          current=$(read_answer _commit)
+          src=$(read_answer _src_path)
+          if [ -z "$current" ]; then
+            echo "::error::$answers has no _commit: copier records it when the template is a git repository; re-render from one"
+            exit 1
+          fi
+          if [ -z "$src" ]; then
+            echo "::error::$answers has no _src_path: copier cannot update without the template location"
+            exit 1
+          fi
+          # copier's short forms for the template location, expanded the way
+          # copier does so git can reach the same repository.
+          case "$src" in
+            gh:*) src="https://github.com/${src#gh:}"; src="${src%.git}.git" ;;
+            gl:*) src="https://gitlab.com/${src#gl:}"; src="${src%.git}.git" ;;
+          esac
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "src=$src" >> "$GITHUB_OUTPUT"
+          echo "template $src, cell at $current"
+
+      - name: Resolve the latest template version
+        id: latest
+        env:
+          SRC: ${{ steps.lineage.outputs.src }}
+        run: |
+          tags=$(git ls-remote --tags --refs "$SRC")
+          latest=$(printf '%s\n' "$tags" \
+            | sed -nE 's#^[0-9a-f]+[[:space:]]+refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
+            | sort -V | tail -n1)
+          if [ -z "$latest" ]; then
+            # The ref named exactly HEAD: a local checkout also lists
+            # refs/remotes/origin/HEAD for this pattern.
+            head=$(git ls-remote "$SRC" HEAD)
+            latest=$(printf '%s\n' "$head" | awk '$2 == "HEAD" { print substr($1, 1, 7); exit }')
+            if [ -z "$latest" ]; then
+              echo "::error::could not read HEAD of $SRC"
+              exit 1
+            fi
+            echo "no release tag on $SRC; the latest version is HEAD, $latest"
+          fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "latest $latest"
+
+      - name: Run copier update
+        id: copier
+        run: |
+          # The exit code is captured, not fatal: the PR must open first so a
+          # failure or conflict is visible on it (final step).
+          set +e
+          uvx copier update --defaults --conflict rej
+          exit_code=$?
+          set -e
+          echo "exit=$exit_code" >> "$GITHUB_OUTPUT"
+          echo "copier exited $exit_code"
+
+      - name: Compose the PR body
+        id: body
+        env:
+          SRC: ${{ steps.lineage.outputs.src }}
+          CURRENT: ${{ steps.lineage.outputs.current }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+        run: |
+          # Both live outside the working tree so neither reaches the PR.
+          body="$RUNNER_TEMP/template-sync-body.md"
+          tpl="$RUNNER_TEMP/template"
+
+          # copier.yml and CHANGES.md at the latest version. A tag can be
+          # given to --branch; the no-tag fallback is HEAD, which a plain
+          # shallow clone already is.
+          if [[ "$LATEST" == v* ]]; then
+            git clone --quiet --depth 1 --branch "$LATEST" "$SRC" "$tpl"
+          else
+            git clone --quiet --depth 1 "$SRC" "$tpl"
+          fi
+
+          # Everything copier touched, deletions included (porcelain status
+          # codes: M modified, D deleted, ?? new; .rej files are new files).
+          changes=$(git status --porcelain=v1 --untracked-files=all)
+          rej=$(find . -path ./.git -prune -o -name '*.rej' -type f -print | sed 's#^\./##' | sort)
+
+          # Cell-owned paths: the template's _skip_if_exists list, as the
+          # tracked files in the cell they match (those copier left alone).
+          owned_patterns=$(awk '
+            /^_skip_if_exists:/ { in_list = 1; next }
+            in_list && /^[^[:space:]#-]/ { in_list = 0 }
+            in_list && /^[[:space:]]*-[[:space:]]*/ {
+              sub(/^[[:space:]]*-[[:space:]]*/, "")
+              gsub(/^["'\'']|["'\'']$/, "")
+              print
+            }
+          ' "$tpl/copier.yml")
+          owned=""
+          while IFS= read -r pattern; do
+            [ -n "$pattern" ] || continue
+            owned+=$(git ls-files -- "$pattern")$'\n'
+          done <<<"$owned_patterns"
+          owned=$(printf '%s' "$owned" | sed '/^$/d' | sort -u)
+
+          # Shape notes: the CHANGES.md sections newer than the cell's
+          # version. A version is comparable when it starts with a release
+          # tag (copier writes `vX.Y.Z` or, past a tag, `vX.Y.Z-N-g<sha>`);
+          # otherwise the whole file is shown.
+          base=$(printf '%s' "$CURRENT" | sed -nE 's/^(v[0-9]+\.[0-9]+\.[0-9]+).*$/\1/p')
+          notes=""
+          if [ ! -f "$tpl/CHANGES.md" ]; then
+            notes="none (the template has no CHANGES.md at $LATEST)"
+          elif [ -z "$base" ]; then
+            notes="The cell's version \`$CURRENT\` is not a release tag, so every section follows."$'\n\n'
+            notes+=$(sed 's/^/> /' "$tpl/CHANGES.md")
+          else
+            notes=$(awk -v base="$base" '
+              function part(v, i,    a) { sub(/^v/, "", v); split(v, a, "."); return a[i] + 0 }
+              function newer(v,    i, x, y) {
+                for (i = 1; i <= 3; i++) {
+                  x = part(v, i); y = part(base, i)
+                  if (x != y) return x > y
+                }
+                return 0
+              }
+              /^## v[0-9]+\.[0-9]+\.[0-9]+/ {
+                match($0, /v[0-9]+\.[0-9]+\.[0-9]+/)
+                keep = newer(substr($0, RSTART, RLENGTH))
+              }
+              /^## / && !/^## v[0-9]+\.[0-9]+\.[0-9]+/ { keep = 0 }
+              keep { print "> " $0 }
+            ' "$tpl/CHANGES.md")
+          fi
+          [ -n "$notes" ] || notes="none"
+
+          {
+            echo "## Template version"
+            echo
+            echo "- Current: \`$CURRENT\`"
+            if [ "$CURRENT" = "$LATEST" ]; then
+              echo "- Latest: current"
+            else
+              echo "- Latest: \`$LATEST\`"
+            fi
+            echo
+            echo "## Changed paths"
+            echo
+            if [ -n "$changes" ]; then
+              printf '~~~\n%s\n~~~\n' "$changes"
+            else
+              echo "none"
+            fi
+            echo
+            echo "## Conflicts"
+            echo
+            if [ -n "$rej" ]; then
+              echo "copier could not merge these; each \`.rej\` holds the rejected hunks and is committed beside the file:"
+              echo
+              printf '%s\n' "$rej" | sed 's/^/- /'
+            else
+              echo "none"
+            fi
+            echo
+            echo "## Owned files not touched"
+            echo
+            if [ -n "$owned" ]; then
+              printf '%s\n' "$owned" | sed 's/^/- /'
+            else
+              echo "none"
+            fi
+            echo
+            echo "## Shape notes"
+            echo
+            printf '%s\n' "$notes"
+          } > "$body"
+
+          if [ -n "$changes" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$rej" ]; then
+            echo "conflicts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "conflicts=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "body=$body" >> "$GITHUB_OUTPUT"
+          cat "$body"
+
+      - name: Open or update the sync PR
+        id: pr
+        if: steps.body.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: template-sync
+          delete-branch: true
+          commit-message: "chore(template): sync to ${{ steps.latest.outputs.latest }}"
+          title: "Template sync: ${{ steps.lineage.outputs.current }} -> ${{ steps.latest.outputs.latest }}"
+          body-path: ${{ steps.body.outputs.body }}
+          add-paths: .
+
+      - name: Summarise the run
+        env:
+          CURRENT: ${{ steps.lineage.outputs.current }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+          CHANGED: ${{ steps.body.outputs.changed }}
+          COPIER_EXIT: ${{ steps.copier.outputs.exit }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          {
+            echo "## Template version"
+            echo
+            echo "- Current: \`$CURRENT\`"
+            if [ "$CURRENT" = "$LATEST" ]; then
+              echo "- Latest: current"
+            else
+              echo "- Latest: \`$LATEST\`"
+            fi
+            echo
+            if [ "$CHANGED" = "true" ]; then
+              echo "Sync PR: ${PR_URL:-opened or updated on \`template-sync\`}"
+            else
+              echo "No change: nothing to sync, no PR opened."
+            fi
+            if [ "$COPIER_EXIT" != "0" ]; then
+              echo
+              echo "copier update exited $COPIER_EXIT; see the step log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on conflicts or a copier error
+        env:
+          CONFLICTS: ${{ steps.body.outputs.conflicts }}
+          COPIER_EXIT: ${{ steps.copier.outputs.exit }}
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          # Last on purpose: the PR is open by now, so the failure sits on it.
+          ok=true
+          if [ "$CONFLICTS" = "true" ]; then
+            echo "::error::copier left .rej files; resolve them on the template-sync branch${PR_URL:+ ($PR_URL)}"
+            ok=false
+          fi
+          if [ "$COPIER_EXIT" != "0" ]; then
+            echo "::error::copier update exited $COPIER_EXIT; see its step log${PR_URL:+ (PR: $PR_URL)}"
+            ok=false
+          fi
+          $ok
