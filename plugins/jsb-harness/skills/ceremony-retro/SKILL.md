@@ -63,18 +63,23 @@ the PR body or report cites them.
      `#n` in the body or the branch name that is an issue in this
      repository; none when there is none. Its `route:` and `source:` labels
      come from `cellq list --state done` (one call, matched by `number`),
-     and from `cellq list` across the open states when the issue is still
-     open (a PR merged against an open issue). A PR with no linked issue,
-     or one whose issue carries no route or source label, is counted under
-     `none` in those rows, never dropped: a merged PR that bypassed the
-     queue is itself a finding.
+     from `cellq list` across the open states when the issue is still
+     open (a PR merged against an open issue), and, for an issue in
+     neither list (closed by the merge's `Closes` line and never `cellq
+     complete`d, or closed by hand), from `gh issue view <n> --json
+     labels`, a free read. A PR with no linked issue, or one whose issue
+     carries no route or source label, is counted under `none` in those
+     rows, never dropped: a merged PR that bypassed the queue is itself a
+     finding.
    - **Review runs and rounds.** The gate stamps one `claude-review` status
      per run on the head it reviewed and posts one summary comment per run
      (`rounds run, findings fixed, Minor findings noted`). Review runs for
      a PR are the `claude-review` statuses across its commits
      (`repos/<o>/<r>/pulls/<p>/commits`, then
-     `repos/<o>/<r>/commits/<sha>/statuses` filtered to that context; one
-     per distinct run, so a status re-read on the same sha counts once).
+     `repos/<o>/<r>/commits/<sha>/statuses` filtered to that context;
+     every status entry counts, since each gate run posts exactly one and
+     a re-run on the same sha, James restarting a stuck gate, posts
+     another and cost another run).
      Rounds are the sum of the rounds each gate summary comment states
      (`repos/<o>/<r>/issues/<p>/comments`, the comments by the Actions
      bot); a `proposal` PR's summary says the gate was skipped and counts
@@ -82,18 +87,22 @@ the PR body or report cites them.
      "not stated" and the PR is left out of the rounds average but kept in
      every other column.
    - **Rework commits.** Commits of the PR whose subject carries the gate's
-     `review` scope: `fix(review):`, `refactor(review):` or
-     `test(review):` (the three forms the gate's prompt writes).
+     `review` scope, `<type>(review):` for any Conventional Commits type
+     (`fix(review):` is the usual one; the gate's prompt names
+     `refactor(review):` and `test(review):` too, and allows any type).
    - **Surface.** From the claim comment on the linked issue (`claimed by
-     <ref> at <time>`, the `claimed_by` field of the `cellq list` row): a
-     ref of digits only is an Actions run id, so `Actions`; a ref of the
-     form `user@host` is `local`; any other ref is a Claude Code session id
-     from the laptop or the cloud, which the ref alone does not tell apart:
-     it is `cloud` when the PR body carries the cloud marker CLAUDE.md asks
-     cloud sessions to write (`followed /<skill> from source`) or a
-     `claude.ai` session link, else `local`. No claim comment (a PR with no
-     linked issue, or an issue moved by hand) is `unknown`. Say the rule
-     once in the report so the surface column is read for what it is.
+     <ref> at <time>`, the `claimed_by` field of the `cellq list` row, and
+     the comment's author from `repos/<o>/<r>/issues/<n>/comments`). A
+     comment posted by `github-actions[bot]` was written with a workflow
+     token, so `Actions`, whatever the ref looks like; so is a ref of
+     digits only, an Actions run id. A ref of the form `user@host` is
+     `local`. Any other ref is a Claude Code session id from the laptop or
+     the cloud, which the ref alone does not tell apart: it is `cloud` when
+     the PR body carries the cloud marker CLAUDE.md asks cloud sessions to
+     write (`followed /<skill> from source`) or a `claude.ai` session link,
+     else `local`. No claim comment (a PR with no linked issue, or an issue
+     moved by hand) is `unknown`. Say the rule once in the report so the
+     surface column is read for what it is.
    - **Model.** The gate summary comment, when it names the model it ran
      with; else `not named`. (The design's usage record, when the cell has
      one, names the model per session; read it when CLAUDE.md says where
@@ -122,14 +131,17 @@ the PR body or report cites them.
 3. **Compute the report.** One markdown table each, always all of them,
    even when a table has a single row or every cell is `none`; an empty
    window produces a report whose every count is zero and no PR. Read the
-   band boundary once:
+   band boundary and the file limit once:
    ```bash
    cellq threshold task.max_diff_lines
+   cellq threshold task.max_files
    ```
    The size bands are: `small`, diff lines below half of that value;
-   `medium`, from half up to and including it; `large`, above it. Each
-   table carries the row count it averages over, so a mean of one PR is
-   read as such.
+   `medium`, from half up to and including it; `large`, above it. The
+   size-band table carries one more row, the PRs whose `changed_files`
+   exceeds `task.max_files` whatever their band, so that key has a row of
+   its own to cite. Each table carries the row count it averages over, so
+   a mean of one PR is read as such.
 
    ```markdown
    ## Retro report — <date>
@@ -143,6 +155,7 @@ the PR body or report cites them.
    | small (below half) | | | | |
    | medium (half to the limit) | | | | |
    | large (above the limit) | | | | |
+   | over task.max_files (any band) | | | | |
 
    ### Review rounds and rework by route
    | Route | PRs | Mean rounds | Mean rework commits | PRs with rework |
@@ -185,8 +198,8 @@ the PR body or report cites them.
 
    `PRs that reached review.max_rounds` compares each PR's rounds with
    `cellq threshold review.max_rounds`. Under the tables, one line per
-   merged PR with the row it fed (number, band, route, source, runs,
-   rounds, rework, surface, model), so every cell of every table can be
+   merged PR with the row it fed (number, band, files, route, source,
+   runs, rounds, rework, surface, model), so every cell of every table can be
    checked against the PR it came from.
 
 4. **Decide the threshold changes.** Read every key of `thresholds.yml`
@@ -199,17 +212,20 @@ the PR body or report cites them.
 
    | Key | Evidence row | Direction |
    |---|---|---|
-   | `task.max_diff_lines`, `task.max_files` | size band table | lower when `medium` has more rounds or rework per PR than `small` by a margin the PR counts support; raise when `large` PRs merged with no more rounds or rework than `medium` and no re-route named the limit |
+   | `task.max_diff_lines` | size band table, the three band rows | lower when `medium` has more rounds or rework per PR than `small` by a margin the PR counts support; raise when `large` PRs merged with no more rounds or rework than `medium` and no re-route named the limit |
+   | `task.max_files` | size band table, the `over task.max_files` row against the `small` row | lower when PRs within the file limit still show more rounds or rework per PR than `small` and a re-route named the file count; raise when PRs over the limit merged with no more rounds or rework than `small` and no re-route named it |
    | `route.spec_if.files_over`, `route.spec_if.sessions_over` | route table and the re-route items | lower when `small`-route PRs re-routed through R3 for files or a second session, or needed more rounds than `spec`-route PRs; raise when `spec`-route work of few files merged in one round |
    | `review.max_rounds` | gate load | raise when PRs reached the limit and merged with `needs-human` after a fix James made by hand; lower when every PR merged under it with rounds to spare |
    | `edges.<cell>`, `edges.default` | source table and the breaks row | lower a cell's weight when its requests cost more rounds or rework per PR than `own` or caused breaks; raise it when its requests merged as cleanly as `own` |
    | `spec.max_unfolded_deltas`, `claim.stale_after_hours`, `ceremonies.<name>.every_merges` | none in this report | never changed by the retro; grooming's and health's reports are their evidence, and a change to them is an issue for James, not a retro proposal |
 
    A step is the smallest move that puts the value on the other side of
-   the evidence: for a size key, the largest or smallest diff that merged
-   cleanly in the row cited, rounded as the current value is written; for
-   a count key, one; for a weight, the same move as the difference between
-   `edges.self` and `edges.default` divides into. Write, for each changed
+   the evidence: for a size key, the largest or smallest diff (or file
+   count) that merged cleanly in the row cited, rounded as the current
+   value is written; for a count key, one; for a weight, halfway from the
+   current value toward the bound the evidence favours, zero when
+   lowering and `edges.self` when raising, written with the decimals the
+   file already uses. Write, for each changed
    key, one sentence citing the table and row (`task.max_diff_lines: the
    size-band table's medium row shows more rounds per PR than the small
    row over <n> PRs`). A key with evidence pointing both ways, or with a

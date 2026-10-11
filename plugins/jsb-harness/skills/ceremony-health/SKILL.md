@@ -73,18 +73,21 @@ those lines into the report.
      test on its own through the cell's test runner (`pytest -k <name>`,
      `python3 -m unittest <module>.<Class>.<name>`, `bash <script>` for a
      shell test, as the test command indicates), and keep the runner's
-     output line and exit code.
-   - **Unnamed statement.** Search the test suite for the test that asserts
-     it: the identifiers the statement uses (a function, a flag, a verb, an
-     exact string it quotes) grepped across the tests. When one test
-     clearly asserts the statement (its assertions check the behaviour the
-     statement describes, not merely mention the name), or a compound
-     statement is asserted clause by clause by a few tests that together
-     cover all of it, those are "the test that exists under another name":
-     run each as above and mark the statement for a test reference naming
-     each in step 5. When no test asserts it, or the tests found cover
-     only part of it, the statement has no test, and the evidence says
-     which clause is uncovered.
+     output line and exit code. When the named test is not found (deleted
+     or renamed), also run the search below: a test that asserts the
+     statement under another name is what step 5 fixes by a reference
+     rather than an issue.
+   - **Unnamed statement, or named test not found.** Search the test suite
+     for the test that asserts it: the identifiers the statement uses (a
+     function, a flag, a verb, an exact string it quotes) grepped across
+     the tests. When one test clearly asserts the statement (its
+     assertions check the behaviour the statement describes, not merely
+     mention the name), or a compound statement is asserted clause by
+     clause by a few tests that together cover all of it, those are its
+     tests: run each as above and keep their names, so step 5 can write
+     them after `— test:`. When no test asserts it, or the tests found
+     cover only part of it, the statement has no test, and the evidence
+     says which clause is uncovered.
    - **Content statements** (a file says, contains, names something) are
      checked by reading the file at the line; the evidence is the file and
      line, and "passing" means the line still says it.
@@ -103,7 +106,11 @@ those lines into the report.
      dead; a statement whose code remains is never dead, however its test
      fares. The evidence is the search that found nothing in the code plus
      the removing commit.
-   - **Met**: all three hold: the test passed (step 2); no open gap issue
+   - **Met**: all three hold: the test passed (step 2: the named test, or
+     for an unnamed statement the test or tests found to assert it; a
+     statement that names a test which no longer exists is not met even
+     when another test asserts it, since its named test is missing); no
+     open gap issue
      names it (`gh issue list --state open --search "Gap: in:title" --json
      number,title,body`, read each; a gap names the statement when its
      title or body quotes it or the criterion it was cut from); and the
@@ -124,7 +131,19 @@ those lines into the report.
      still present); or the test passes but an open gap issue names the
      statement or the gate is red. The evidence is the specific reason:
      the runner's failure line, the search that found no test, the
-     deleting commit, the gap issue number, or the failing status.
+     deleting commit, the gap issue number, or the failing status; and,
+     when step 2 found a test under another name, that test and its
+     result.
+
+   A draft spec whose linked issue (the parent in its `Linked issue:`
+   line) is still open is being built: classify and report its statements
+   like any other, so the self-description is honest, but mark the spec
+   row `(draft, in progress: #<parent>)`, propose nothing for it in steps
+   4 to 6, file no `Unmet:` issue for it in step 5 (its tasks are the
+   work that will meet those statements, and an `Unmet:` issue would
+   compete with them in `cellq ready`), and count its unmet statements
+   separately in the verdict. Read the parent's state with `gh issue view
+   <parent> --json state,stateReason,labels`.
 
    Keep one record line per statement, in this form, with the statement
    quoted word for word (the issue title in step 5 is cut from it):
@@ -141,44 +160,61 @@ those lines into the report.
    ```bash
    cellq parent <n>
    ```
-   The delta is shipped but unfolded when the linked issue is closed, its
-   `sub_issues` is not empty and `all_closed` is true, and the delta is
-   still in Pending changes. (Open parents are grooming's business, step 8
-   there; a parent closed as `state:dropped` is an abandoned delta, listed
-   in the report for James and left in place; a closed parent with no
-   sub-issues was never split, so nothing was built to check: listed as
-   "closed, never split".) For each shipped unfolded delta, run `converge`
-   steps 2 and 3 (the skill in
+   The delta is shipped but unfolded when the linked issue is closed as
+   completed (`gh issue view <n> --json state,stateReason,labels`: closed,
+   not `not_planned`, label `state:done`), its `sub_issues` is not empty
+   and `all_closed` is true, and the delta is still in Pending changes.
+   (Open parents are grooming's business, step 8 there; a parent closed as
+   not planned, `state:dropped`, is an abandoned delta, listed in the
+   report for James and left in place; a closed parent with no sub-issues
+   was never split, so nothing was built to check: listed as "closed,
+   never split".) Before folding, apply `converge`'s own guard as grooming
+   step 8 does: a fold PR for this parent that is open, or merged, labelled
+   `proposal` and naming the parent (`gh pr list --state open --label
+   proposal --search "#<n>"`, then `--state merged`), or an open gap issue
+   linked to it, means the delta is already in hand; list it as "fold PR
+   #<p> pending" or "gap #<g> open" and fold nothing. Otherwise run
+   `converge` steps 2 and 3 (the skill in
    `plugins/jsb-harness/skills/converge/SKILL.md`; from source in a cloud
    session) with one difference: the parent is already closed, so
-   `converge` step 1's gate on it is replaced by the check above, and the
+   `converge` step 1's gate on it is replaced by the checks above, and the
    fold goes into this spec's proposal PR (step 6) rather than a PR of its
    own, so that one PR per spec carries everything health proposes for it.
    Evaluate every criterion exactly as `converge` step 2 says (one `PASS`
-   or `FAIL` line each, real evidence, nothing partial). All pass: make the
-   fold edits from `converge` step 3 on the spec branch of step 6 and keep
-   the evidence lines for the PR body. Any fail: open the gap issue exactly
-   as `converge` step 4 does (`cellq idea "Gap: <criterion>" --source
-   agent`, then `cellq link <parent> <gap>`), fold nothing from that delta,
-   and list it in the report; the parent being closed, the converge
-   trigger will not refire, so the next health run re-checks it here. When
-   the converge skill is not installed and cannot be read from source, do
-   not improvise a fold; list the delta as "needs converge" and move on.
+   or `FAIL` line each, real evidence, nothing partial). All pass: keep
+   the fold edits from `converge` step 3 for the spec branch of step 6,
+   with the evidence lines for the PR body. Any fail: open the gap issue
+   exactly as `converge` step 4 does (`cellq idea "Gap: <criterion>"
+   --source agent`, then `cellq link <parent> <gap>`), fold nothing from
+   that delta, and list it in the report. When the gap closes,
+   `cell-converge.yml` fires on the parent and `converge` step 1 stops
+   because the parent is closed, so it is the next health run that
+   re-checks the delta here. When the converge skill is not installed and
+   cannot be read from source, do not improvise a fold; list the delta as
+   "needs converge" and move on.
 
 5. **Act on dead and unmet statements.**
-   - **Dead**: on the spec branch of step 6, delete the statement from
-     Behavior. When every statement of the spec is dead and another spec
+   - **Dead**: as an edit kept for the spec branch of step 6, delete the
+     statement from Behavior. When every statement of the spec is dead and another spec
      in `specs/` now describes the capability, instead change the spec's
      `Status:` line to `superseded by <that file>` and leave its text in
      place (the `spec` skill's form; a superseded spec is history, not a
      contract). When every statement is dead and no spec covers the
      capability, delete the statements and say in the PR body that
      Behavior is now empty and James should decide whether the spec goes.
-   - **Unmet, test exists under another name** (step 2 found exactly one
-     test that asserts it, and it passed): on the spec branch, append
-     `— test: <name>` to the statement; no issue.
-   - **Unmet, otherwise** (no test, a failing test, a deleted test, an
-     open gap, or a red gate): one issue per statement, unless an open
+   - **Unmet, test exists under another name** (the statement names a test
+     that is missing, and step 2 found the test or tests that assert it,
+     all passing, with no open gap and the gate green): on the spec
+     branch, replace the name after `— test:` with the names found; no
+     issue. The statement stays unmet in the report, with the PR as its
+     action, until James merges the reference.
+   - **Met but unnamed** (an unnamed statement whose tests step 2 found and
+     ran): on the spec branch, append `— test: <names>` to the statement,
+     so the next health run finds the tests by name; no issue, and the
+     statement counts as met.
+   - **Unmet, otherwise** (no test, a failing test, a deleted test with no
+     test under another name, an open gap, or a red gate): one issue per
+     statement, unless an open
      issue with the same title already exists (`gh issue list --state open
      --search "Unmet: in:title" --json number,title`, compare titles word
      for word). Write a body file naming the spec and its line, the
@@ -199,16 +235,29 @@ those lines into the report.
      ```
      A statement too long for a title is cut at the first clause and the
      body carries it whole. When the gate itself is red, every statement
-     is unmet for that reason; open one issue titled `Unmet: gate red on
-     <default> at <sha>` instead of one per statement, and list the
-     statements in its body.
+     is unmet for at least that reason; the statements whose only reason
+     is the gate get one issue between them, titled `Unmet: gate red on
+     <default> at <sha>`, listing them in its body, while a statement
+     with a reason of its own (a missing, failing or deleted test, an open
+     gap) still gets its own issue, so the trace of that defect does not
+     close with the gate.
 
 6. **One proposal PR per spec.** For each spec with any fold (step 4),
-   deletion, supersession or test reference (step 5), one branch from the
-   default branch in the worktree of step 1 (`git switch -c
-   health/<spec-name>-<date> origin/<default>`), editing that spec file
-   and nothing else. `git status` must show only that file under `specs/`;
-   if it shows anything else, revert it before committing. Commit as
+   deletion, supersession or test reference (step 5), first look for a
+   health PR already waiting on James: an open PR labelled `proposal`
+   whose head branch starts `health/<spec-name>-` (`gh pr list --state
+   open --label proposal --json number,headRefName,body`). When one
+   exists, open no second PR: list it in the report as "PR #<p> pending
+   James's merge", and when this run found changes its body does not
+   carry, say which under that line, so the next run after the merge
+   proposes them. Otherwise, one spec at a time: a branch from the default
+   branch in the worktree of step 1 (`git switch -c
+   health/<spec-name>-<date> origin/<default>`), the edits kept from
+   steps 4 and 5 for this spec file and nothing else, commit, push, open
+   the PR, and only then the next spec's branch, so no spec's edits sit
+   uncommitted when another branch is cut. `git status` must show only
+   that file under `specs/`; if it shows anything else, revert it before
+   committing. Commit as
    `docs(spec): health <spec-name> — fold, prune, name tests` (keep only
    the parts that apply), with a body saying why: the ceremony issue, the
    commit checked, and one line per change. Push the branch (never the
@@ -248,26 +297,28 @@ those lines into the report.
    ### Features
    | Spec | Purpose | Met | Unmet | Dead |
    |---|---|---|---|---|
-   | <name> (<status>) | <first sentence of Purpose> | <n> | <n> | <n> |
+   | <name> (<status> | draft, in progress: #<parent>) | <first sentence of Purpose> | <n> | <n> | <n> |
 
    ### Unmet statements
    | Spec | Statement | Evidence | Action |
    |---|---|---|---|
-   | <name> | <statement> | <evidence> | #<issue> \| PR #<n> (test reference) |
+   | <name> | <statement> | <evidence> | #<issue> \| PR #<n> (test reference) \| in progress: #<parent> |
 
    ### Proposals and gaps
    - PR #<n> <spec>: folded <delta>; removed <k> statements; named <k> tests
+   - PR #<p> <spec>: pending James's merge (changes not in it: <list> | none)
    - Gap #<n>: <criterion> (delta <name>, parent #<p>)
    - Abandoned delta: <name> in <spec> (parent #<p> dropped)
    - Superseded, out of scope: <spec> (by <file>)
 
-   Verdict: requirements met | requirements not met: <n> statements
+   Verdict: requirements met | requirements not met: <n> statements (<k> of them in draft specs still being built)
    ```
 
    The verdict counts unmet statements only; dead statements are proposals
    and shipped-but-unfolded deltas are folds, neither a failed
    requirement. "requirements met" needs every statement in every spec in
-   scope met. Every PR, issue and statement the ceremony touched appears in
+   scope met; the parenthesis appears only when a draft spec in progress
+   contributes to the count. Every PR, issue and statement the ceremony touched appears in
    the report, so James can check each one. Then close the ceremony issue:
    ```bash
    cellq complete <ceremony issue>
