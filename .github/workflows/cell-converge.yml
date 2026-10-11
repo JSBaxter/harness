@@ -53,6 +53,23 @@
 #   trigger would need it.
 # - Skills and `cellq` reach the runner through the setup-cell composite
 #   action, as in cell-scope.
+# - Tokens. The skill's success path pushes a fold branch and opens a
+#   proposal PR, which the caller's scopes (contents: read, no
+#   pull-requests) would not allow with the workflow token. It works
+#   because claude-code-action exchanges the OIDC token (id-token: write)
+#   for a Claude GitHub App installation token and sets GH_TOKEN and
+#   GITHUB_TOKEN to it in the process that spawns the session
+#   (src/entrypoints/run.ts; git-config.ts gives git a credential helper
+#   that reads GH_TOKEN). So inside the session `git push`, `gh pr create`
+#   and `cellq` all run on the App token, with the App's own scopes; the
+#   step's `GH_TOKEN: github.token` below reaches only the action's other
+#   composite steps, as in cell-scope. Two consequences: the fold PR and
+#   any gap issue are authored by claude[bot], and, unlike writes made
+#   with the workflow token, they fire events (the review gate skips the
+#   PR on its `proposal` label; cell-scope allows the bot for that reason).
+#   Unverified until the first real run: an `issues: closed` event runs
+#   only the default-branch copy of a caller, so no probe from a branch
+#   can start the session.
 name: Cell Converge (reusable)
 
 on:

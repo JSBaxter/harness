@@ -20,8 +20,11 @@
 # - `Closes #n` closes the issue on merge but leaves its `state:` label
 #   behind (the plan's "Done state"). Part (a) below is what makes `done`
 #   true in the queue: `cellq complete` for every issue the body closes.
-#   Only same-repository `#n` references count; `owner/repo#n` and URL forms
-#   close issues elsewhere, which this cell's adapter must not touch.
+#   Only the `#n` form counts, which is what `/ship` writes. `owner/repo#n`
+#   may close an issue elsewhere, which this cell's adapter must not touch;
+#   the full-URL and `GH-n` forms GitHub also honours are not read, so an
+#   issue closed that way keeps a stale `state:` label until grooming
+#   routes it.
 # - The period of each ceremony is read from the cell's thresholds.yml with
 #   `cellq threshold ceremonies.<name>.every_merges`; nothing here is tuned.
 #   A missing file or key fails the step, so the gap shows red in the
@@ -33,14 +36,19 @@
 #   step 4), and each checks the title names its ceremony. Scope will not
 #   run on it: an issue created with GITHUB_TOKEN fires no `issues: opened`
 #   event, and cell-scope skips `source:ceremony` regardless.
-# - A re-run of a job files nothing twice: an open `source:ceremony` issue
-#   with the same title means this count's ceremony is already on the queue.
+# - A re-run of a job while its ceremony issue is still open files nothing
+#   twice: an open `source:ceremony` issue with the same title means this
+#   count's ceremony is already on the queue. Once that issue is closed a
+#   re-run would file it again; re-running a finished ceremony run is a
+#   hand action, so that is left to the hand.
 # - Two merges close together run twice, each with its own count, which is
 #   what the period rule wants. The count comes from the search endpoint's
 #   total_count (specs/cellq.md), which can lag a merge by a few seconds;
 #   a run that reads the count before the index catches up sees the
 #   previous one, and a ceremony that falls on the skipped count waits for
 #   its next period. Known; measure on the first cell before adding a wait.
+#   A count of zero (a new cell's first merge read before the index has it)
+#   is due for nothing, since every period divides zero.
 # - The github context (event_name, event.pull_request.*) is the caller's,
 #   so the job guard below works unchanged via workflow_call. The caller's
 #   `pull_request: [closed]` also fires for a close without a merge, which
@@ -117,6 +125,12 @@ jobs:
           count=$(cellq merged-count | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])')
           echo "Merged PRs in $GITHUB_REPOSITORY: $count"
           echo "- Merged-PR count: $count" >> "$summary"
+          if (( count == 0 )); then
+            echo "::warning::merged-count is zero right after a merge: the search index has not caught up; no ceremony is due at zero"
+            echo "- Count is zero (search index lag); no ceremony filed" >> "$summary"
+            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
           # (c) File each ceremony whose period divides the count. The
           # ceremony names are the five skills, ceremony-<name>; each
