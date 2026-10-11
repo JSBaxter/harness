@@ -8,7 +8,7 @@
   `docs/adr/` touching the area you're changing. If your change contradicts an
   accepted ADR, stop and surface it — don't silently "fix" the decision away.
 - **Never push to main.** All changes go: branch → small commits → `/ship` → PR.
-  One issue = one PR = reviewable in under ten minutes.
+  One issue = one PR = reviewable within `task.max_review_minutes`.
 - **Conventional Commits, always.** Every commit message uses the
   `type(scope): summary` form (`feat`, `fix`, `refactor`, `docs`, `test`,
   `chore`, …). The body still says *why*, not just *what*.
@@ -52,7 +52,8 @@
   alongside this one — then READ the skill you need from
   `../harness/plugins/jsb-harness/skills/<name>/SKILL.md` and follow it,
   noting "followed /<name> from source" in your PR body. Never improvise a
-  substitute procedure silently.
+  substitute procedure silently. The same goes for `cellq`: when the plugin
+  is not installed, run it as `../harness/plugins/jsb-harness/bin/cellq`.
 - `gh` may or may not be present in cloud containers (newer images
   pre-install it; auth flows through the proxy automatically). Check with
   `command -v gh`; if absent, use the GitHub MCP tools (e.g.
