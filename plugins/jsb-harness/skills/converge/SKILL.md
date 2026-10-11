@@ -38,7 +38,17 @@ absent).
    nothing has been built to check, whatever `all_closed` says. A non-zero
    exit is an environment or usage failure: report the stderr line and
    stop. If the parent itself is closed, stop and say so: it has already
-   been folded or dropped.
+   been folded or dropped. Then look for a fold PR that is already open
+   for it (`gh pr list --state open --search "Closes #<n> in:body" --json
+   number,url,headRefName`, or the REST search endpoint with the same
+   query): if one exists, stop and report its URL, touching nothing, so
+   that a task James reopened and re-closed, or a hand run, never opens a
+   second PR. If the parent is `state:in-review` and no fold PR is open,
+   James closed the last one without merging: read that PR's comments
+   before going on, and if they say the fold itself was wrong, stop and
+   record it (`cellq state <n> blocked --reason "converge: fold PR #<pr>
+   closed: <his reason>; the delta in specs/<area>.md needs editing"`);
+   otherwise carry on and fold again from the current default branch.
 
    Then find the delta. Read the parent (its definition of done names the
    spec: "The spec is written to `specs/<area>.md`") and search every spec
@@ -91,15 +101,13 @@ absent).
    git fetch origin
    git worktree add --detach <dir> origin/<default>
    ```
-   (In an Actions run the checkout already is the default branch; still
-   fetch, and confirm `git rev-parse HEAD` equals `git rev-parse
-   origin/<default>` before trusting it.) Read CLAUDE.md there for the
-   test command. The list to evaluate is every line under the delta's
-   `Acceptance criteria`, plus every statement in its **What changes** that
-   no criterion covers, each treated as a criterion in its own right: it
-   describes behaviour the spec is about to assert, so it needs evidence
-   like any other, and this is how all of What changes reaches Behavior
-   with a test named (step 3). For each, decide pass or fail and keep the
+   (In an Actions run the checkout may already be the default branch:
+   fetch, and if `git rev-parse HEAD` equals `git rev-parse
+   origin/<default>` work in place; if not, add the worktree as above.)
+   Read CLAUDE.md there for the test command. The list to evaluate is
+   every line under the delta's `Acceptance criteria`, and nothing else:
+   the criteria are what the delta promised and what the fold-or-gap
+   decision below turns on. For each, decide pass or fail and keep the
    evidence: a test name and its result, a command and its output, or a
    file and line. Write one line per criterion, exactly in this form, with
    the criterion quoted word for word as the delta states it (the gap
@@ -118,13 +126,17 @@ absent).
    Rules:
    - Every criterion gets a line; none is skipped, deferred or marked
      partial. A criterion stated against a fixture (a cell rendered from
-     the project template, a temporary thresholds file, a scratch issue)
-     is exercised by building that fixture in the worktree or the test
-     repository; building it is part of the check, not a reason to fail
-     it. A criterion you cannot exercise is one whose check needs a
-     credential, network or surface this session has no way to obtain, or
-     a command that does not exist; it is a `FAIL` whose evidence says
-     exactly what could not be run and why.
+     the project template, a temporary thresholds file) is exercised by
+     building that fixture in the worktree; building it is part of the
+     check, not a reason to fail it. One that needs a live issue is
+     exercised against a scratch repository kept for that purpose, never
+     against the cell's own queue, where an issue filed with `cellq idea`
+     enters intake. A criterion you cannot exercise is one whose check
+     needs a credential, network or surface this session has no way to
+     obtain, or a command that does not exist; it is a `FAIL` whose
+     evidence begins `environmental:` and says exactly what could not be
+     run and why, so that the gap it opens (step 4) is read as a request
+     for the resource, not for a code change.
    - The kind of evidence follows the kind of criterion. A criterion about
      behaviour (something runs, returns, exits, refuses) passes only on a
      test's result or a command's output; one about content (a file says,
@@ -141,14 +153,15 @@ absent).
      issue (step 4) and the session's reply.
 
 3. **All pass: fold the delta, as a proposal PR.** On a branch from the
-   default branch (`git switch -c converge/fold-<n> origin/<default>`, in
+   default branch, named for the parent and the commit the evidence came
+   from so that a later run never collides with it
+   (`git switch -c converge/fold-<n>-<short sha> origin/<default>`, in
    the worktree from step 2), edit the spec file and nothing else:
-   - Move the delta's **What changes** content into `## Behavior`, as
-     statements, under the heading of the area each one belongs to (add a
-     heading only when none fits). Cut one statement per evidence line,
-     worded from What changes, so that all of What changes moves and each
-     statement has exactly one line of evidence behind it; end it by
-     naming what that line named:
+   - Move all of the delta's **What changes** content into `## Behavior`,
+     as statements, under the heading of the area each one belongs to
+     (add a heading only when none fits). Cut one statement per
+     acceptance criterion, worded from What changes, and end it by naming
+     what that criterion's evidence line named:
      ```markdown
      - <the statement> — test: <test name>
      ```
@@ -156,7 +169,12 @@ absent).
      to check the statement: the test name; the command, when the evidence
      was a command (`— test: cellq threshold no.such.key exits non-zero`);
      or the file and line, when the criterion was about content
-     (`— test: README.md:12`).
+     (`— test: README.md:12`). What-changes content that no criterion
+     covers still moves, as its own statement with no `— test:` ending
+     (a statement names its test once one exists), and the PR body lists
+     each such statement under `## Untested`, so James sees what the
+     delta described but never promised to check; the health ceremony
+     reports it until a test exists.
    - For a new spec, Behavior is already written: add the `— test:` ending
      to each statement a criterion covers, change `Status: draft` to
      `Status: active`, leave the top-level `## Acceptance criteria` where
@@ -193,9 +211,11 @@ absent).
    - one line saying which delta folds and which parent it closes;
    - the evidence lines from step 2, verbatim, under `## Evidence`;
    - a `## Spec changes` section in `/ship` step 9's form, one line per
-     statement the diff adds to or removes from Behavior
+     statement the diff adds to, changes in, or removes from Behavior
      (`<spec file>: "<statement>" — test: <test name>`, or `— test:
-     removed`);
+     removed`; a new-spec fold lists each statement it gave a test);
+   - `## Untested`, listing any statement folded without a test, or
+     omitted when there is none;
    - `Closes #<n>`, so the merge closes the parent.
    Open no other PR and no issue. Then move the parent to in-review through
    the adapter, so the queue shows a PR exists for it and the grooming
@@ -205,7 +225,8 @@ absent).
    ```
    If James closes the fold PR without merging, the parent stays in
    in-review with no PR; grooming's scan for a parent whose sub-issues
-   are all closed and no fold PR is open brings it back here.
+   are all closed and no fold PR is open brings it back to step 1, which
+   reads his reason before folding again on a fresh branch.
 
 4. **Any fail: open a gap issue, change nothing else.** No branch, no
    commit, no PR; the delta stays in Pending changes and the parent keeps
@@ -225,16 +246,19 @@ absent).
    <the three questions from step 6>
    ```
    Before filing, look for an earlier gap with the same title: `gh issue
-   list --state all --search "Gap: <criterion> in:title" --json
-   number,state,labels` (write the criterion into a search string without
-   its backticks and quotes; without `gh`, `GET search/issues?q=repo:<o>/
-   <r>+<words>+in:title`; if the search cannot run at all, file anyway: a
-   duplicate costs James a close, a lost gap costs a release). One that is
-   open already is this gap: link it if it is not yet a sub-issue and file
-   nothing new. One that is closed (`state:done` with the criterion still
-   failing, or `state:dropped`, which the grooming ceremony also sets on a
-   stale issue) is refiled, with a line in the new body naming the
-   earlier one and how to end the loop if the criterion itself is wrong:
+   list --state all --search "<words> in:title" --json
+   number,title,state,labels`, where `<words>` are the criterion's words
+   with no `Gap:` prefix, backticks, quotes or colons (a colon makes a
+   search qualifier), and then compare the returned titles with
+   `Gap: <criterion>` exactly; without `gh`, `GET search/issues?q=repo:
+   <o>/<r>+<words>+in:title`. If the search cannot run at all, file
+   anyway: a duplicate costs James a close, a lost gap costs a release.
+   One that is open already is this gap: link it if it is not yet a
+   sub-issue and file nothing new. One that is closed (`state:done` with
+   the criterion still failing, or `state:dropped`, which the grooming
+   ceremony also sets on a stale issue) is refiled, with a line in the new
+   body naming the earlier one and how to end the loop if the criterion
+   itself is wrong:
    "Refiles #<old>, closed as <state>. If this criterion should not hold,
    the fix is to edit the delta in `specs/<area>.md`; closing this issue
    again will file it again." Then file it and make it a sub-issue of the
