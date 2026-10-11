@@ -13,8 +13,17 @@
 # What the caller stub must provide (a called workflow is capped at the
 # caller's token scopes, so it fails to start without these):
 #   on: pull_request: [closed]
-#   permissions: contents: read, issues: write
+#   permissions: contents: read, issues: write, pull-requests: read
 #   secrets: inherit
+#   pull-requests: read is not in the stub stem-cell wrote ahead of this
+#   file (template/.github/workflows/cell-ceremony.yml.jinja). It is
+#   needed: a PR's merge state is pull-request data, and without the scope
+#   the search qualifier `is:merged` that `cellq merged-count` relies on
+#   matches nothing under GITHUB_TOKEN (probed on harness-test-drive: with
+#   contents: read + issues: write alone, `is:pr` found every PR and
+#   `is:merged` found zero), so no ceremony would ever be due. Until the
+#   stub grants it, the call fails to start, which is visible; it does not
+#   run and silently count zero.
 #
 # Design notes:
 # - `Closes #n` closes the issue on merge but leaves its `state:` label
@@ -79,6 +88,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     steps:
       # The checkout is for thresholds.yml: `cellq threshold` resolves it
       # from the git toplevel of the working directory.
