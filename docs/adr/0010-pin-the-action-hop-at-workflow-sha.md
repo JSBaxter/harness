@@ -79,6 +79,12 @@ the fixture-cell CI) stands.
 - One extra checkout per run (a few seconds; the harness is small).
 - Nothing in the harness may be secret from now on. Identities, tokens and
   anything stealth-scoped stay outside this repository, as they already do.
-- The two `@main` references in ADR 0006's decision 3 and in the
-  `cell-scope.yml` header comment that recorded the exposure are gone;
-  decision 3 carries a dated note pointing here.
+- The `cell-scope.yml` step comment that recorded the `@main` exposure is
+  gone. ADR 0006's decision 3 keeps its text, as superseded decisions do,
+  and carries a dated note pointing here.
+- Verified on harness-test-drive before merge (run 38173205055, probe job
+  114569994186): in a called workflow `job.workflow_sha` was the harness
+  branch head, the checkout landed at exactly that SHA, both actions ran as
+  `./.harness/.github/actions/<name>`, the delivered `cellq` and reviewer
+  were byte-identical to that commit's copies, and `rm -rf .harness` left
+  the workspace clean.
