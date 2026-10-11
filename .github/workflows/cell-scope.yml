@@ -12,9 +12,11 @@
 #   on: issues: [opened]; issue_comment: [created]
 #   permissions: contents: read, issues: write, id-token: write
 #   secrets: inherit
-#   concurrency: group cell-scope-${{ github.event.issue.number }}, so two
-#     quick owner comments on one needs-input issue do not start two sessions
-#     that both write that issue through cellq.
+#   concurrency: group cell-scope-${{ github.event.issue.number }} with
+#     cancel-in-progress: false (unlike the review stub), so two quick owner
+#     comments on one needs-input issue queue rather than run together, and
+#     a cancel never kills a session between cellq's label write and its
+#     comment write.
 #
 # Design notes:
 # - The prompt names the skill and nothing else: `Run /scope on issue #<n>`.
@@ -34,6 +36,12 @@
 #   skill would stop on them anyway; skipping here saves the session.
 # - `issue_comment` fires for PR comments too (a PR is an issue to that
 #   event), hence the `!github.event.issue.pull_request` guard.
+# - The re-run guard also excludes the adapter's own question. `cellq state
+#   <n> needs-input --reason` sets the label and then posts
+#   `state: needs-input — <question>?` (specs/cellq.md); when `/scope` runs
+#   on a laptop that comment is authored with James's token, so without the
+#   `startsWith` clause the question itself would start a session that only
+#   asks it again. Issues filed from inside Actions fire nothing anyway.
 name: Cell Scope (reusable)
 
 on:
@@ -51,6 +59,7 @@ jobs:
                 && github.event.action == 'created'
                 && github.event.comment.user.login == github.repository_owner
                 && contains(github.event.issue.labels.*.name, 'state:needs-input')
+                && !startsWith(github.event.comment.body, 'state: needs-input')
               )
          )
     runs-on: ubuntu-latest
@@ -84,8 +93,8 @@ jobs:
           # claude[bot] and must still be scoped; the action refuses non-human
           # actors unless named here. Named, not "*": allowed bots skip the
           # permission check. (Issues filed with GITHUB_TOKEN from inside
-          # Actions, e.g. `cellq request-feature` in a workflow, never fire
-          # this workflow at all; grooming routes those.)
+          # Actions, e.g. `cellq idea` in a workflow, never fire this
+          # workflow at all; grooming routes those.)
           allowed_bots: "claude"
           show_full_output: true
           # Bash unrestricted for the same reason as the review gate: the skill
