@@ -54,10 +54,11 @@ step 9 turns those lines into the report.
    the limit *and* the branch shows no activity since the claim: no open PR
    that references the issue (`gh pr list --state open --search "#<n>"`),
    and no commit on any branch newer than `claimed_at` whose message or
-   branch name names the issue (`git fetch --all --prune`, then `git log
-   --all --since=<claimed_at> --grep='#<n>'`, and for each branch matched
-   by `git branch -r --list '*<n>*'` the date of `git show -s --format=%cI
-   <branch>`). Activity means a session is still working it, even slowly:
+   branch name names the issue as a whole number, not as a substring of a
+   longer one (`git fetch --all --prune`, then `git log --all
+   --since=<claimed_at> --grep='#<n>\b'`, and for each remote branch whose
+   name has `<n>` as a whole segment between `-`, `_` or `/`, the date of
+   `git show -s --format=%cI <branch>`). Activity means a session is still working it, even slowly:
    leave it alone and list it in the report as "old claim, active".
    Otherwise release it:
    ```bash
@@ -73,9 +74,9 @@ step 9 turns those lines into the report.
    judgement. There are two parts:
    - **James said drop.** For every open issue (`cellq list` across every
      open state; `in-progress` and `in-review` included), read its comments.
-     A comment by the repository owner whose whole body is the word `drop`,
-     posted after the last grooming (or at any time, when there was none),
-     is an instruction:
+     A comment by the repository owner whose whole body is the word `drop`
+     is an instruction, whenever it was posted: the issue is still open, so
+     it has not been acted on yet.
      ```bash
      cellq state <n> dropped --reason "drop: James's comment of <date>"
      ```
@@ -95,8 +96,11 @@ step 9 turns those lines into the report.
 
 4. **Rescore by the edge table.** Edge weights change when the retro's
    threshold PR merges, so a priority set at scoping can be out of date.
-   For each issue in `cellq list --state ready`, recompute the priority
-   exactly as `scope` step 5 does: the hint from the body's `Priority hint`
+   For each issue in `cellq list --state ready` that does not carry
+   `source:ceremony` (ceremony issues are filed ready with no definition of
+   done and no route, and are never rescored or sent back; the audit's may
+   wait in ready for James), recompute the priority exactly as `scope`
+   step 5 does: the hint from the body's `Priority hint`
    field when it has a value, else the default `scope` uses when there is
    none; times the weight for the issue's `source:` label:
    - `source:own`, or none: `cellq threshold edges.self`
@@ -147,9 +151,11 @@ step 9 turns those lines into the report.
    is titled `Split spec: <path>` (`cellq list --source ceremony`, then by
    title), write a body naming the spec, the count, the limit key and each
    delta's heading, plus a `## Definition of done` section whose
-   acceptance statements are that `/split-spec` has run on the spec and
-   each delta is either a task sub-issue of its parent or a sub-spec of its
-   own, and open it:
+   acceptance statement is that the spec's Pending changes count is within
+   `spec.max_unfolded_deltas` again, reached by the right remedy per delta:
+   a delta still to be built is cut by `/split-spec` into its own sub-spec
+   or tasks; a delta whose tasks have all shipped is folded by `/converge`
+   (its parent's sub-issues are closed), not split. Open it:
    ```bash
    cellq idea "Split spec: <path>" --body <file> --source ceremony
    ```
@@ -161,8 +167,13 @@ step 9 turns those lines into the report.
    cellq scope <n> --dod <dod-file> --route small --priority <p>
    ```
 
-7. **Route what is still new.** For each issue in `cellq list --state new`
-   that does not carry `source:ceremony`, run `/scope` on it (the skill in
+7. **Route what is still new.** Collect the issues in `cellq list --state
+   new` and the open issues with no `state:` label at all (`gh issue list
+   --state open --json number,labels`, keeping those with no label starting
+   `state:`): the latter were opened from the web UI or with raw `gh` and
+   their `cell-scope` run never labelled them, which `scope` step 1 treats
+   as new. For each one that does not carry `source:ceremony`, run
+   `/scope` on it (the skill in
    `plugins/jsb-harness/skills/scope/SKILL.md`; from source in a cloud
    session) and record the state it set. An issue in new that carries
    `source:ceremony` was opened by a ceremony that did not scope it, or was
@@ -179,7 +190,11 @@ step 9 turns those lines into the report.
    ```bash
    cellq parent <n>
    ```
-   When `all_closed` is true and `sub_issues` is not empty, look for its
+   The output names the parent, its sub-issues and `all_closed`. If the
+   adapter takes a child rather than a parent (the output's `parent` is not
+   `<n>` and `sub_issues` is empty), call it again with one of the parent's
+   sub-issues, read from `GET repos/<o>/<r>/issues/<n>/sub_issues` (reading
+   is free). When `all_closed` is true and `sub_issues` is not empty, look for its
    fold PR: a PR, open or merged, labelled `proposal`, whose body closes or
    names the parent (`gh pr list --state all --label proposal --search
    "#<n>"`). When there is none, run `/converge` on the parent (the skill in
