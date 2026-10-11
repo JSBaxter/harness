@@ -31,13 +31,17 @@ Review against, in priority order:
        names the diff's subject (grep `specs/` for the changed module,
        command, flag or file); then ask of each statement whether the diff
        makes it false or changes what it promises.
-   (b) A Behavior statement the diff changes or adds names no test, or names
-       a test that does not assert it. A statement names its test as
-       `— test: <name>` or equivalent; open that test and check it exercises
-       the statement, since a matching name is not evidence.
+   (b) A Behavior statement the diff changes or adds, or whose described
+       behaviour the diff changes, names no test, or names a test that does
+       not assert it. A statement names its test as `— test: <name>` or
+       equivalent; open that test and check it exercises the statement,
+       since a matching name is not evidence, and a deleted or inverted
+       test counts as none.
    (c) The PR body's `## Spec changes` section disagrees with the diff: it
        says `none` while a `specs/*.md` file changed; it lists a statement the
-       diff does not change; or the section is missing. Read the body with
+       diff does not change; or the section is missing. A `none` that agrees
+       with the diff is still wrong when (a) fails; report that under (a).
+       Read the body with
        `gh pr view <n> --json body --jq .body`, or without `gh`,
        `GET /repos/{owner}/{repo}/pulls/{n}` and its `body` field. Before a PR
        exists (a /ship round), use the draft body you were given; if you were
