@@ -75,8 +75,9 @@
 #   the guard skips in seconds.
 # - The PR body is untrusted text: it reaches the shell only through an
 #   environment variable, never by expression inside the script.
-# - `cellq` reaches the runner through the setup-cell composite action, as
-#   in cell-scope, with the same accepted `@main` second hop (#66 pins it).
+# - `cellq` reaches the runner through the setup-cell composite action
+#   from a harness checkout pinned at job.workflow_sha, as in cell-scope
+#   (ADR 0010).
 name: Cell Ceremony (reusable)
 
 on:
@@ -99,8 +100,21 @@ jobs:
       # from the git toplevel of the working directory.
       - uses: actions/checkout@v6
 
+      # cellq comes from the harness checked out at this workflow file's own
+      # commit (job.workflow_sha), as in cell-scope (ADR 0010); the checkout
+      # is removed once delivery is done.
+      - name: Check out the harness at this workflow's commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JSBaxter/harness
+          ref: ${{ job.workflow_sha }}
+          path: .harness
+
       - name: Deliver skills and cellq
-        uses: JSBaxter/harness/.github/actions/setup-cell@main
+        uses: ./.harness/.github/actions/setup-cell
+
+      - name: Remove the harness checkout
+        run: rm -rf .harness
 
       - name: Complete closed issues and file due ceremonies
         id: ceremony
