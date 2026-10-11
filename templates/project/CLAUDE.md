@@ -8,7 +8,7 @@
   `docs/adr/` touching the area you're changing. If your change contradicts an
   accepted ADR, stop and surface it — don't silently "fix" the decision away.
 - **Never push to main.** All changes go: branch → small commits → `/ship` → PR.
-  One issue = one PR = reviewable in under ten minutes.
+  One issue = one PR = reviewable within `task.max_review_minutes`.
 - **Conventional Commits, always.** Every commit message uses the
   `type(scope): summary` form (`feat`, `fix`, `refactor`, `docs`, `test`,
   `chore`, …). The body still says *why*, not just *what*.
@@ -27,6 +27,22 @@
 - **New conventions get an ADR** (`/adr`), and CLAUDE.md gets the resulting rule.
 - **Tests run before every PR.** Test command: `TEST_COMMAND_HERE`.
   Lint command: `LINT_COMMAND_HERE`.
+- **Issue state is set only through `cellq`** (the queue adapter,
+  `plugins/jsb-harness/bin/cellq` in the harness plugin): `cellq state`,
+  `cellq claim`, `cellq complete`, and so on. Never `gh issue edit`,
+  `gh project`, or an MCP issue-write tool. The adapter is the only code that
+  knows the labels and fields behind a state.
+- **No rule carries a number.** Every threshold — diff size, file count,
+  review rounds, stale-claim age, ceremony periods, edge weights — comes from
+  `thresholds.yml` at the repo root, read with `cellq threshold <dotted.key>`.
+  If you need a limit, read it; never write one into a skill or this file.
+- **Skills an agent in this cell uses, and when:** `scope` on a new issue;
+  `implement` after a claim on a `small` issue; `ship` to open the PR;
+  `converge` when a parent issue's tasks all close; `ceremony-<name>` from a
+  ceremony issue (`grooming`, `health`, `retro`, `structural`, `audit`);
+  `queue` for any issue-state change; `steward` when watching a PR you opened.
+  Each is named by this entrypoint, a trigger, or a step in another skill —
+  none is discovered.
 
 ## Cloud sessions (claude.ai/code) — read this first
 
@@ -36,7 +52,8 @@
   alongside this one — then READ the skill you need from
   `../harness/plugins/jsb-harness/skills/<name>/SKILL.md` and follow it,
   noting "followed /<name> from source" in your PR body. Never improvise a
-  substitute procedure silently.
+  substitute procedure silently. The same goes for `cellq`: when the plugin
+  is not installed, run it as `../harness/plugins/jsb-harness/bin/cellq`.
 - `gh` may or may not be present in cloud containers (newer images
   pre-install it; auth flows through the proxy automatically). Check with
   `command -v gh`; if absent, use the GitHub MCP tools (e.g.
@@ -51,5 +68,10 @@
 - `docs/adr/` — decision history (MADR-style, supersede-don't-delete)
 - `.github/workflows/claude-review.yml` — thin caller of the harness reusable
   review workflow; the agent review gate on every PR (proposals skip it)
-- `.claude/skills/steward/SKILL.md` — how an agent watching a PR here should
-  weigh review-gate findings (advisory vs. worth a push)
+- `thresholds.yml` — every number a rule reads, via `cellq threshold`; only
+  the workflow retro changes it, as a PR James merges
+- `.github/ISSUE_TEMPLATE/request.yml` — the cross-cell request form: six
+  fields, enters intake as `state:new`, `scope` writes the definition of done
+
+The `steward` skill (how to weigh review-gate findings on a PR you are
+watching) now comes from the harness plugin, not from this repo.
