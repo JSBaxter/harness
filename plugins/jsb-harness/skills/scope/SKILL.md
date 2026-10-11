@@ -80,8 +80,10 @@ REST endpoints `repos/<o>/<r>/issues/<n>` and `.../issues/<n>/comments` when
      ```
      Set no route and no priority, do not write a definition of done, and
      stop. Report the issue URL and the question. The cell-scope workflow
-     re-runs this skill when James comments; the re-run starts at step 1
-     with his comment as part of the issue.
+     re-runs this skill when James comments (for an issue its guard does
+     not let through, grooming's routing step or `/scope <n>` by hand
+     does); the re-run starts at step 1 with his comment as part of the
+     issue.
 
 4. **Route (R1).** List the files the change touches: those the issue names,
    plus those a reader of the specs and the code can see must change with

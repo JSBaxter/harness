@@ -110,9 +110,11 @@ GitHub MCP write tool. Reading is free.
    not a question: say in the body that the first thing closing it means
    is the question which settles it answered in the issue with the
    evidence (the agent that claims it investigates first), and describe
-   the fix conditional on that answer. A question only James can answer
-   goes in the report instead, under "Questions for James", not into the
-   finding's body, so that `scope` is not the one left to ask it.
+   the fix conditional on that answer. A finding that cannot be stated
+   without an answer only James can give is not filed: it goes in the
+   report, under "Questions for James", with the finding it bears on, so
+   that `scope` is not the one left to ask it; James files it, or answers
+   there and the next structural review files it.
 
 5. **The sibling-cell candidate.** When step 3 found a second purpose and
    no open issue already names it, open one issue titled exactly
@@ -134,10 +136,11 @@ GitHub MCP write tool. Reading is free.
    cellq idea "Sibling-cell candidate: <purpose>" --body <file> --source ceremony
    cellq state <n> blocked --reason "James's decision: split <purpose> into a sibling cell?"
    ```
-   The two calls belong together: if the second fails, repeat it before
-   doing anything else, and if it keeps failing say so in the report with
-   the issue number, because a decision record left in `new` is what
-   grooming's routing step would next hand to `scope` as a task.
+   The two calls belong together, issued back to back so the issue is in
+   `new` for as short a time as possible: if the second fails, repeat it
+   before doing anything else, and if it keeps failing say so in the
+   report with the issue number, because a decision record left in `new`
+   is what grooming's routing step would next hand to `scope` as a task.
 
 6. **Report and close.** Post the report as a comment on the ceremony
    issue (a comment is not state: `gh issue comment <n> --body-file
@@ -167,6 +170,9 @@ GitHub MCP write tool. Reading is free.
 
    ### Questions for James
    - <a question only he can answer, with the finding it bears on> | none
+
+   Sibling-cell candidate: #<n> (blocked, awaiting James) | #<n> (in new: the
+   blocked move failed) | none
    ```
 
    "Not raised" matters: a pass that found nothing in an area says the

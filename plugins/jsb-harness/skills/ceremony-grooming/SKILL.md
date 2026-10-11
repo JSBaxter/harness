@@ -205,7 +205,9 @@ step 9 turns those lines into the report.
    body does not start `state:` follows that latest question. Run
    `/scope` on each answered one; it treats the answer as part of the
    issue. One with nothing after its latest question is waiting on James;
-   leave it, so the question is never asked twice. The
+   leave it, so an unanswered question is not asked again. One with no
+   such comment at all was moved there by hand without a reason: run
+   `/scope` on it too, which asks its own question if it needs one. The
    one issue `/scope` stops on is a
    ceremony issue the workflow filed (`source:ceremony` with a title
    starting `Ceremony: `) that is still in new, which means the workflow
@@ -222,6 +224,8 @@ step 9 turns those lines into the report.
    ```bash
    cellq parent <n>
    ```
+   A non-zero exit (the issue not found, no token) is not a skip: put its
+   stderr line in the report and list the issue as "needs converge".
    The output is `{parent, sub_issues: [{number, closed}], all_closed}`
    (the adapter contract): `parent` is the parent of `<n>` itself, or
    `null` when it has none, and `sub_issues` are the children of `<n>`. A
