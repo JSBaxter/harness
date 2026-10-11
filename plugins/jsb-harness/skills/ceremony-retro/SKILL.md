@@ -51,9 +51,10 @@ the PR body or report cites them.
 
 2. **Gather the merged PRs and their issues** (reads only). List closed
    PRs (`gh api --paginate "repos/<o>/<r>/pulls?state=closed&sort=updated&
-   direction=desc"`) and keep those whose `merged_at` is inside the window;
-   stop paginating once a page's every `updated_at` is older than the
-   window start. For each merged PR read from the pull endpoint
+   direction=desc"`) and keep those whose `merged_at` is inside the window
+   (`--paginate` fetches every page, which is fine; a PR is never merged
+   after it was last updated, so nothing in the window is missed). For
+   each merged PR read from the pull endpoint
    (`repos/<o>/<r>/pulls/<p>`): `additions`, `deletions` and
    `changed_files` (diff lines are additions plus deletions, the measure
    `implement` step 5 uses); the labels (`proposal` means the gate skipped
@@ -77,9 +78,12 @@ the PR body or report cites them.
      a PR are the `claude-review` statuses across its commits
      (`repos/<o>/<r>/pulls/<p>/commits`, then
      `repos/<o>/<r>/commits/<sha>/statuses` filtered to that context;
-     every status entry counts, since each gate run posts exactly one and
-     a re-run on the same sha, James restarting a stuck gate, posts
-     another and cost another run).
+     every status entry counts, since a gate run that reviewed posts one
+     and a re-run on the same sha, James restarting a stuck gate, posts
+     another and cost another run; a `proposal` PR's stamp is a skip, not
+     a run, and goes in the gate-load table's skipped row instead; a run
+     that crashed on an already-stamped sha posts nothing and is missed,
+     so the count is a floor and the table says so).
      Rounds are the sum of the rounds each gate summary comment states
      (`repos/<o>/<r>/issues/<p>/comments`, the comments by the Actions
      bot); a `proposal` PR's summary says the gate was skipped and counts
@@ -147,7 +151,7 @@ the PR body or report cites them.
    ## Retro report — <date>
 
    Window: merged after <previous retro close time> (#<m>) | whole repository.
-   Merged PRs: <n>. Surface rule: run id = Actions; user@host = local; session id = cloud with the cloud marker, else local.
+   Merged PRs: <n>. Surface rule: claim comment by the Actions bot or a run-id ref = Actions; user@host = local; session id = cloud with the cloud marker, else local; no claim comment = unknown. Review runs are a floor (step 2).
 
    ### Review rounds and rework by PR size band
    | Band (task.max_diff_lines) | PRs | Mean rounds | Mean rework commits | PRs with rework |
@@ -224,7 +228,7 @@ the PR body or report cites them.
    | `route.spec_if.files_over`, `route.spec_if.sessions_over` | route table and the re-route items | lower when `small`-route PRs re-routed through R3 for files or a second session, or needed more rounds than `spec`-route PRs; raise when `spec`-route work of few files merged in one round |
    | `review.max_rounds` | gate load | raise when PRs reached the limit and merged with `needs-human` after a fix James made by hand; lower when every PR merged under it with rounds to spare |
    | `edges.<cell>`, `edges.default` | source table and the breaks row | lower a cell's weight when its requests cost more rounds or rework per PR than `own` or caused breaks; raise it when its requests merged as cleanly as `own` |
-   | `spec.max_unfolded_deltas`, `claim.stale_after_hours`, `ceremonies.<name>.every_merges` | none in this report | never changed by the retro; grooming's and health's reports are their evidence, and a change to them is an issue for James, not a retro proposal |
+   | `task.max_review_minutes`, `spec.max_unfolded_deltas`, `claim.stale_after_hours`, `ceremonies.<name>.every_merges` | none in this report (reading time is not measurable from events, design section ten) | never changed by the retro; grooming's and health's reports are their evidence, and a change to them is an issue for James, not a retro proposal |
 
    A step is the smallest move that puts the value on the other side of
    the evidence: for a size key, the largest or smallest diff (or file

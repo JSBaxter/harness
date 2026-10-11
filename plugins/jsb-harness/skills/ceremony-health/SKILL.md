@@ -48,8 +48,9 @@ those lines into the report.
    appears in the report only as a line saying so. For each spec in scope,
    keep its title, its `Purpose` paragraph (the first paragraph under `##
    Purpose`; the report quotes its first sentence) and its statements. A
-   statement is each list item, bulleted or numbered, under `## Behavior`
-   or any heading below it, and each row of a table there whose cells
+   statement is each list item, bulleted or numbered, in the `## Behavior`
+   section, that is, from that heading to the next `## ` heading, its
+   `### ` sub-headings included, and each row of a table there whose cells
    state a rule (a key and what it does, a verb and its effect); a
    paragraph of prose is context, not a statement. A statement names its
    test when it ends `— test: <name>` (the `spec` skill's form), where the
@@ -120,9 +121,9 @@ those lines into the report.
      the head commit of the most recently merged PR (`gh pr list --state
      merged --json headRefOid,mergedAt`, the newest `mergedAt`, then `gh
      api repos/<o>/<r>/commits/<sha>/statuses`, the newest entry with
-     that context). Green is that status `success` and no failed check
-     run on the default branch's head (`.../commits/<head>/check-runs`);
-     red is anything else. A PR head with no `claude-review` status at all
+     that context). Green is that status `success`; red is `failure` or
+     `error`. Other workflows on the default branch are not the gate and
+     do not count. A PR head with no `claude-review` status at all
      (merged before the gate existed, or the gate never ran) is green for
      this purpose and the report says so. Read the gate once, not per
      statement; it is the same answer for every statement.
@@ -138,7 +139,10 @@ those lines into the report.
      result.
 
    A draft spec whose linked issue (the parent in its `Linked issue:`
-   line) is still open is being built: classify and report its statements
+   line) is still open, or which has no such line but is named by an
+   open issue (`gh issue list --state open --search "<spec path>"`, the
+   path in the body, as `scope`'s blocker comment and a sub-spec's tasks
+   write it), is being built: classify and report its statements
    like any other, so the self-description is honest, but mark the spec
    row `(draft, in progress: #<parent>)`, propose nothing for it in steps
    4 to 6, file no `Unmet:` issue for it in step 5 (its tasks are the
@@ -215,7 +219,7 @@ those lines into the report.
      with the names found; no issue for the missing name. The statement
      stays unmet in the report, with the PR as its action, until James
      merges the reference. An open gap or a red gate on top of that is a
-     reason of its own, handled by the next bullet as well.
+     reason of its own, handled by the "Unmet, otherwise" bullet as well.
    - **Met but unnamed** (an unnamed statement whose tests step 2 found and
      ran): on the spec branch, append `— test: <names>` to the statement,
      so the next health run finds the tests by name; no issue, and the
@@ -224,10 +228,14 @@ those lines into the report.
      test under another name, an open gap, or a red gate; a renamed test
      with a gap or a red gate gets the reference edit above and appears
      here only for the gap or the gate): one issue per statement, unless
-     an open
-     issue with the same title already exists (`gh issue list --state open
-     --search "Unmet: in:title" --json number,title`, compare titles word
-     for word). Write a body file naming the spec and its line, the
+     an issue with the same title already exists (`gh issue list --state
+     all --search "Unmet: in:title" --json number,title,state`, compare
+     titles word for word): an open one is this issue, file nothing; a
+     closed one is refiled with a line in the new body naming it and the
+     way out, as `converge` step 4 does: "Refiles #<old>, closed as
+     <state>. If this statement should not hold, the fix is to edit or
+     remove it in `specs/<spec>.md`; closing this issue again will file it
+     again." Write a body file naming the spec and its line, the
      statement, the evidence line from step 3, the commit checked, and a
      `## Definition of done` section whose acceptance statement is that
      the statement has a test that asserts it, named after `— test:` in
@@ -247,7 +255,9 @@ those lines into the report.
      body carries it whole. When the gate itself is red, every statement
      is unmet for at least that reason; the statements whose only reason
      is the gate get one issue between them, titled `Unmet: gate red on
-     <default> at <sha>`, listing them in its body, while a statement
+     <default>` (the sha and the status in the body, so the title dedupes
+     across runs while the gate stays red), listing them in its body,
+     while a statement
      with a reason of its own (a missing, failing or deleted test, an open
      gap) still gets its own issue, so the trace of that defect does not
      close with the gate.
@@ -318,7 +328,10 @@ those lines into the report.
    - PR #<n> <spec>: folded <delta>; removed <k> statements; named <k> tests
    - PR #<p> <spec>: pending James's merge (changes not in it: <list> | none)
    - Gap #<n>: <criterion> (delta <name>, parent #<p>)
+   - Fold pending: <name> in <spec> (fold PR #<p> open | gap #<g> open)
    - Abandoned delta: <name> in <spec> (parent #<p> dropped)
+   - Closed, never split: <name> in <spec> (parent #<p>)
+   - Needs converge: <name> in <spec> (converge skill not available)
    - Superseded, out of scope: <spec> (by <file>)
 
    Verdict: requirements met | requirements not met: <n> statements (<k> of them in draft specs still being built)
