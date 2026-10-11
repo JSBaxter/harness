@@ -13,11 +13,17 @@
 # we copy from `$GITHUB_ACTION_PATH/../../../plugins/jsb-harness` at run time.
 # One source serves every repo; project repos carry no copy (ADR 0005, 0006).
 #
-# Delivery point: $HOME/.claude/skills, not the workspace. claude-code-action
-# runs Claude from its own checkout (`.claude-pr/`), not $GITHUB_WORKSPACE, so
-# a workspace-relative `.claude/skills/` is not the directory it scans; the
-# user-level directory is read regardless of cwd. setup-reviewer learned this
-# the hard way (see its comment); this action starts from that lesson.
+# Delivery point: $HOME/.claude/skills, not the workspace. A workspace-
+# relative `.claude/agents/` did not register under claude-code-action
+# (setup-reviewer's comment has the symptom), while the user-level directory
+# is read regardless of the session's cwd; this action starts from that
+# lesson. What the session's cwd actually is remains unverified until the
+# first issue-triggered run; `cellq threshold` depends on it (it resolves
+# thresholds.yml from the git toplevel of the cwd).
+#
+# Contract: only each skill's SKILL.md is delivered. No skill ships a sibling
+# file today; one that does must extend the copy below, or it will pass the
+# delivery check here and fail inside the session.
 name: setup-cell
 description: >-
   Deliver every jsb-harness skill into $HOME/.claude/skills/<name>/SKILL.md and
@@ -53,6 +59,7 @@ runs:
         mkdir -p "$skills_dst" "$bin_dst"
 
         delivered=()
+        # SKILL.md only; see the contract note in the header.
         for src in "$skills_src"/*/SKILL.md; do
           [ -f "$src" ] || continue
           name=$(basename "$(dirname "$src")")

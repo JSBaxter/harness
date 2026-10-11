@@ -25,8 +25,9 @@
 #   action, since no plugin install exists in Actions. $HOME/.claude is the
 #   delivery point that claude-code-action actually reads.
 # - A run that fails leaves the issue in its prior state (no `state:` label,
-#   or `state:needs-input`). Nothing here retries or marks it; the grooming
-#   ceremony routes any issue still unscoped. So failure is safe, not silent.
+#   `state:new`, or `state:needs-input`). Nothing here retries or marks it;
+#   the grooming ceremony routes any issue still unscoped. So failure is
+#   safe, not silent.
 # - The github context (event_name, event.issue.*, event.comment.*) is the
 #   caller's, so the job guard below works unchanged via workflow_call.
 # - `source:ceremony` issues are filed ready by cell-ceremony.yml and the
@@ -63,6 +64,14 @@ jobs:
 
       # Skills and cellq are delivered from the harness at run time; the
       # calling repo carries neither (ADR 0005 pattern, see the action).
+      # Known exposure: ADR 0006 decision 3 accepted this `@main` second hop
+      # for setup-reviewer because it carried prose only. setup-cell extends
+      # it to `cellq`, an executable that writes issue state, so a bad harness
+      # merge reaches every cell's next scope run without a bump PR. Accepted
+      # for now because ADR 0009 already ships cellq unpinned to laptops and
+      # cloud sessions through the plugin copy, so Actions adds no new
+      # surface; revisit (pin to a SHA with Renovate tracking it) if a cellq
+      # regression ever reaches a cell this way.
       - name: Deliver skills and cellq
         uses: JSBaxter/harness/.github/actions/setup-cell@main
 
