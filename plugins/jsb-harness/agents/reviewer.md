@@ -36,11 +36,19 @@ Review against, in priority order:
        what it promises.
    (b) A Behavior statement the diff changes or adds, or whose described
        behaviour the diff changes, names no test, or names a test that does
-       not assert it. A statement names its test as `— test: <name>` or
-       equivalent; open that test and check it exercises the statement,
-       since a matching name is not evidence, and a deleted or inverted
-       test counts as none. Report each statement once: under (a) when (a)
-       fires for it, else under (b).
+       not assert it. A statement names its test as `— test: <name>`, where
+       the name is a test the runner re-runs: a test function or case
+       (for UI appearance, the test that runs the screenshot comparison).
+       A command or a file and
+       line after `— test:` is not a test, so a statement carrying one
+       names no test. Open the named test and check it
+       exercises the statement, since a matching name is not evidence, and
+       a deleted or inverted test counts as none. A list item the diff adds
+       to `## Behavior` that is not about what the software does (what a
+       document says, a step a person takes by hand, a naming or layout
+       convention) belongs in Constraints or Non-goals and is reported
+       here as naming no test. Report each statement once: under (a) when
+       (a) fires for it, else under (b).
    (c) The PR body's `## Spec changes` section disagrees with the diff: it
        says `none` while the diff changes or adds a statement in the
        `## Behavior` section of a `specs/*.md` file; it lists a statement the

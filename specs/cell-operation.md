@@ -88,7 +88,10 @@ Runs after a claim on a `small` issue. Design 7.3.
    uncertain; otherwise goes straight to the change.
 3. Implements on a branch; runs the cell's test, lint and type commands.
 4. If behaviour a spec describes changed, edits that spec's Behavior
-   section in the same PR; every changed statement names its test.
+   section in the same PR; every changed statement names its test, a test
+   name and never a command or a file and line. A statement that is
+   documentation, process or convention goes to Constraints or Non-goals,
+   not Behavior, with no test line.
 5. Hands off to `ship`.
 6. R3, the exit: if the diff passes `task.max_diff_lines` or
    `task.max_files`, a second session is needed, or a contract another
@@ -116,14 +119,26 @@ Runs after a claim on a `small` issue. Design 7.3.
 Runs in a fresh session when the last sub-issue of a parent closes.
 
 1. Reads the delta's acceptance criteria and the merged code on main.
-2. For each criterion, states pass or fail with the evidence (test name,
-   command output, file and line).
-3. All pass: opens a docs-only PR with the `proposal` label that moves the
-   delta's content into Behavior, deletes it from Pending changes, and
-   closes the parent when merged.
-4. Any fail: opens a gap issue naming the criterion and evidence, linked
-   to the parent, and leaves the delta in place. The parent stays open.
-5. Never edits code.
+2. For each criterion, states pass or fail with the evidence. A behaviour
+   criterion passes only on the result of a real, re-runnable test (for
+   UI appearance, a screenshot comparison); a command's output or a file
+   and line is evidence of a check, not a test, and a behaviour criterion
+   with no test fails. A criterion about documentation, process or
+   convention passes on the file and line that shows it. A claim about
+   what the software does that no criterion covers (in What changes, or
+   in a new spec's Behavior) is checked for a test the same way, so
+   nothing enters Behavior without one.
+3. Every criterion and uncovered claim passes: opens a docs-only PR with
+   the `proposal` label that deletes
+   the delta from Pending changes and moves its content out: what the
+   software does into Behavior, each statement naming its test;
+   documentation, process or convention into Constraints, Non-goals, the
+   README or an ADR, with no test line. A statement without a test never
+   enters Behavior. The PR closes the parent when merged.
+4. Any fail: opens a gap issue naming the criterion and evidence (for a
+   behaviour criterion with no test, the missing test), linked to the
+   parent, and leaves the delta in place. The parent stays open.
+5. Never edits code, tests or workflows.
 
 ### reviewer (changes)
 
@@ -132,7 +147,7 @@ Adds to the review checklist, as an Important finding when missed:
 - Behaviour a spec describes changed, and the spec's Behavior section was
   not edited in the same PR.
 - A changed Behavior statement names no test, or names a test that does
-  not assert it.
+  not assert it; a command or a file and line is not a test.
 - The PR body's spec-change heading disagrees with the diff.
 
 ### Ceremonies
@@ -144,7 +159,7 @@ PRs James merges, issues, or a report; none changes main directly.
 | Skill | Does |
 |---|---|
 | `ceremony-grooming` | Returns stale claims to ready (R8); drops issues with no activity past a threshold and says why; rescores by the edge table; links dependencies; flags specs over `spec.max_unfolded_deltas` for splitting (R7); routes any issue still in new. |
-| `ceremony-health` | Reads each active spec's Behavior against the code and the test suite. Folds unfolded shipped behaviour, marks superseded, or deletes text for behaviour that no longer exists, each as a proposal PR. Produces the self-description report: features offered; whether requirements are met (every Behavior statement has a passing test, no open gap issue, gate green). |
+| `ceremony-health` | Reads each active spec's Behavior against the code and the test suite. Folds unfolded shipped behaviour, marks superseded, or deletes text for behaviour that no longer exists, each as a proposal PR. Produces the self-description report: features offered; whether requirements are met (every Behavior statement has a passing test, no open gap issue, gate green). Counts Behavior statements only: a statement in Behavior that is not about what the software does is reported as one to move out of Behavior, with a proposal PR that moves it, and is neither met nor unmet. |
 | `ceremony-structural` | Architecture pass: convention drift, layering, security smells, doc rot; one issue per finding; flags a second purpose as a sibling-cell candidate. |
 | `ceremony-retro` | Computes the fixed report (design 10.4): review rounds and rework by PR size band, route and source; cost per merged PR by surface and model; gate load; counts of re-routes, gaps and breaks. Proposes threshold and edge-weight changes as one PR to `thresholds.yml`, each change citing the report. |
 | `ceremony-audit` | Prepares a top-down walk from the self-description, ADRs and plans; runs the quiz with James, functional level first, then approaches and patterns, then implementation decisions; writes a log entry to infra-experiment-notes; opens an issue per gap. Also runs in short form on one capability after each fold. |
@@ -187,11 +202,22 @@ rendered from the project template.
   spec.
 - `split-spec` on a delta lacking non-goals: stops before the splitter
   runs and names the missing field; no issues are created.
-- `converge` when every criterion passes: one open PR, labelled
-  `proposal`, whose diff removes the delta from Pending changes and adds
-  its content to Behavior; no gap issue.
+- `converge` when every criterion passes and every claim no criterion
+  covers (in What changes, or in a new spec's Behavior) has a test: one
+  open PR, labelled `proposal`, whose
+  diff removes the delta from Pending changes and adds its behaviour
+  content to Behavior, each statement naming a test; any documentation,
+  process or convention content is in Constraints, Non-goals, the README
+  or an ADR with no test line; no gap issue.
+- `converge` when every criterion passes but a claim no criterion covers
+  (in What changes, or in a new spec's Behavior) has no test: one open
+  gap issue naming the claim and the missing test; the delta unchanged;
+  no PR.
 - `converge` when one criterion fails: one open gap issue naming the
   criterion and its evidence; the delta unchanged; no PR.
+- `converge` on a behaviour criterion whose only evidence is a command's
+  output or a file and line: one open gap issue naming the criterion and
+  the missing test; the delta unchanged; no PR.
 - `queue ready` on a cell with one own issue at priority 2 and one
   request from a cell weighted 0.5 at priority 3: the own issue ranks
   first.
@@ -201,6 +227,9 @@ rendered from the project template.
 - `ceremony-health` on a cell with a Behavior statement whose test was
   deleted: the self-description report lists that statement as unmet and
   a proposal PR or issue exists for it.
+- `ceremony-health` on a cell whose Behavior holds a statement about what
+  a document says: the report lists it as to move out of Behavior, not as
+  unmet, and a proposal PR moves it.
 - No skill in this spec contains a numeric threshold; `grep` for the
   starter values across `plugins/jsb-harness/skills/` returns nothing.
 - No skill in this spec invokes `gh issue edit`, `gh project`, or an MCP
