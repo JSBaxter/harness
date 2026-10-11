@@ -250,8 +250,9 @@ those lines into the report.
      No route, priority, state or `## Definition of done` section: `scope`
      writes those, and it treats a `source:ceremony` finding like any
      other issue (it skips only the ceremony issue itself, the one whose
-     title starts `Ceremony: `). The cell-scope workflow, grooming's
-     routing of what is still new, or `/scope <n>` by hand gets it there.
+     title starts `Ceremony: `). Grooming's routing of what is still new,
+     `/scope <n>` by hand, or the cell-scope workflow when its guard lets
+     a `source:ceremony` issue through, gets it there.
      A statement too long for a title is cut at the first clause and the
      body carries it whole. When the gate itself is red, every statement
      is unmet for at least that reason; the statements whose only reason

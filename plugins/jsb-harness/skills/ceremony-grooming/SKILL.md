@@ -180,9 +180,9 @@ step 9 turns those lines into the report.
    ```
    No route, priority, state or `## Definition of done` section: `scope`
    writes those, and it treats a `source:ceremony` finding like any other
-   issue (it skips only the `Ceremony: ` issue itself). The cell-scope
-   workflow, step 7 of this ceremony, or `/scope <n>` by hand gets it
-   there.
+   issue (it skips only the `Ceremony: ` issue itself). Step 7 of this
+   ceremony, `/scope <n>` by hand, or the cell-scope workflow when its
+   guard lets a `source:ceremony` issue through, gets it there.
 
 7. **Route what is still new.** Collect the issues in `cellq list --state
    new` and the open issues with no `state:` label at all (`gh issue list
@@ -195,7 +195,14 @@ step 9 turns those lines into the report.
    (`source:ceremony`, title not starting `Ceremony: `) are among them:
    they are filed into new for `scope`, and this step is how they reach it
    when no cell-scope run followed their opening (an issue opened with an
-   Actions token fires no event). The one issue `/scope` stops on is a
+   Actions token fires no event, and the workflow's guard may not let a
+   `source:ceremony` issue through). For the same reason, also collect
+   the issues in `cellq list --state needs-input` on which the repository
+   owner has commented after the question comment (`state: needs-input —
+   ...?`) and no cell-scope re-run followed: run `/scope` on each, which
+   treats the comment as part of the issue. One in `needs-input` with no
+   owner comment since the question is waiting on James; leave it. The
+   one issue `/scope` stops on is a
    ceremony issue the workflow filed (`source:ceremony` with a title
    starting `Ceremony: `) that is still in new, which means the workflow
    run that filed it failed before moving it to ready: list it in the
@@ -218,9 +225,12 @@ step 9 turns those lines into the report.
    it as follows:
    - `parent != null` and `sub_issues == []`: `<n>` is a child, not a
      parent. Its parent is the one to converge; when that parent is open
-     and carries `route:spec` it comes up in this loop on its own, and
-     otherwise run `cellq parent <that parent>` and continue from here
-     with that output.
+     and carries `route:spec` it comes up in this loop on its own; when
+     it is open without that label, run `cellq parent <that parent>` and
+     continue from here with that output; when it is closed (`gh issue
+     view <parent> --json state`), it is the health ceremony's business
+     (step 4 there folds a closed parent whose tasks all closed), not
+     this step's: skip it.
    - `parent == null` and `sub_issues == []`: nothing was split from
      `<n>` yet (a spec still awaited); skip it.
    - `sub_issues` not empty and `all_closed` false: not the moment; skip
@@ -259,7 +269,7 @@ step 9 turns those lines into the report.
    | Priorities rescored | <n> |
    | Dependencies linked | <n> |
    | Specs flagged for splitting (R7) | <n> |
-   | Issues routed from new | <n> (ready <n>, blocked <n>, needs-input <n>) |
+   | Issues routed from new or re-run from needs-input | <n> (ready <n>, blocked <n>, needs-input <n>) |
    | Parents converged | <n> (fold PRs <n>, gap issues <n>, needs converge <n>) |
 
    ### Drop candidates

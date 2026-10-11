@@ -117,9 +117,10 @@ resumes at step 3 from that agenda.
    Set no route, priority or state and write no `## Definition of done`
    section: that is `scope`'s job, and it treats a `source:ceremony` issue
    like any other (it skips only the ceremony issue itself, the one whose
-   title starts `Ceremony: `). `scope` reaches the issue through the
-   cell-scope workflow, through grooming's routing of what is still new,
-   or by hand (`/scope <n>`). A gap that is a decision James has to make
+   title starts `Ceremony: `). `scope` reaches the issue through
+   grooming's routing of what is still new, by hand (`/scope <n>`), or
+   through the cell-scope workflow when its guard lets a `source:ceremony`
+   issue through. A gap that is a decision James has to make
    (two readings of the cell, both defensible) is still a task, not a
    parked question: say in the body that closing it means the decision is
    recorded, as an ADR through `/adr` or as a settled open question in

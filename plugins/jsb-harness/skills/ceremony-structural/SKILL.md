@@ -9,7 +9,7 @@ Read the repository the way a new maintainer would, with CLAUDE.md, the
 ADRs and the specs in hand, and write down where the code has drifted from
 what those documents say, where one layer reaches into another, where
 something looks unsafe, and where a document says something the code
-contradicts. Each finding becomes one issue with a definition of done.
+contradicts. Each finding becomes one issue, filed into new for `scope`.
 Nothing is fixed here: the ceremony produces issues and a report, never a
 commit on the default branch and never a merge.
 
@@ -100,8 +100,9 @@ GitHub MCP write tool. Reading is free.
    section: that is `scope`'s job, and it treats a `source:ceremony`
    finding like any other issue (it skips only the ceremony issue itself,
    the one whose title starts `Ceremony: `). `scope` reaches the issue
-   through the cell-scope workflow, through grooming's routing of what is
-   still new, or by hand (`/scope <n>`). A finding that calls an ADR into
+   through grooming's routing of what is still new, by hand (`/scope
+   <n>`), or through the cell-scope workflow when its guard lets a
+   `source:ceremony` issue through. A finding that calls an ADR into
    question is still one issue, whose body says that closing it is a
    superseding ADR through `/adr` rather than a code change.
 
@@ -117,16 +118,21 @@ GitHub MCP write tool. Reading is free.
    no open issue already names it, open one issue titled exactly
    `Sibling-cell candidate: <purpose>` whose body gives the evidence from
    step 3, which specs and directories would move, and what the dependency
-   between the two cells would become as a cross-cell request. It carries
-   no definition of done: splitting is James's decision, not an agent's
-   task, and the issue is his decision record. It is the one issue this
-   ceremony leaves in `needs-input`, on purpose: nothing in the cell moves
-   it on; James closes it as not planned, or births the sibling (the
-   project-creation path) and closes it when the moved capability's spec
-   is marked superseded here.
+   between the two cells would become as a cross-cell request. It is not
+   a task: splitting is James's decision, not an agent's work, and the
+   issue is his decision record. So it is the one issue this ceremony
+   does not leave in new for `scope`; it goes to `blocked`, with the
+   question as the reason, on purpose. `scope` stops on a blocked issue
+   (step 1 there: a state other than new or needs-input), the cell-scope
+   re-run fires only on `needs-input`, and grooming never rescores or
+   routes a blocked issue, so nothing in the cell moves it on; James
+   closes it as not planned, or births the sibling (the project-creation
+   path) and closes it when the moved capability's spec is marked
+   superseded here. It appears in grooming's drop candidates once a
+   period passes untouched, which is the reminder.
    ```bash
    cellq idea "Sibling-cell candidate: <purpose>" --body <file> --source ceremony
-   cellq state <n> needs-input --reason "Split <purpose> into a sibling cell?"
+   cellq state <n> blocked --reason "James's decision: split <purpose> into a sibling cell?"
    ```
 
 6. **Report and close.** Post the report as a comment on the ceremony
