@@ -3,7 +3,7 @@
 # This is the REUSABLE core (on: workflow_call). Project repos do NOT copy it —
 # each carries a tiny caller stub (templates/project/.github/workflows/
 # claude-review.yml) that `uses:` this file with `secrets: inherit`. So logic
-# changes here reach every primary-identity repo on its next PR without editing
+# changes here reach every project repo on its next PR without editing
 # each repo one by one. See docs/adr/0001-ci-via-reusable-workflow.md.
 #
 # Design notes (don't simplify these away):

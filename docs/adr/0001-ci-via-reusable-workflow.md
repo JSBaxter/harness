@@ -62,6 +62,8 @@ call the workflow.
   the gate (derive it from the reusable workflow: swap `on: workflow_call` for
   the `pull_request` trigger + concurrency block). Those few repos accept drift,
   which is acceptable — they are meant to be isolated anyway.
+  > **Note (2026-10-12):** the multi-identity mechanism described here was
+  > removed as unused (ADR 0011). One GitHub identity applies.
 - **Not covered:** non-executing per-repo files (`CLAUDE.md`, etc.) still drift;
   a future `/sync-template` skill can roll those forward deliberately. Low-stakes
   because they don't run.

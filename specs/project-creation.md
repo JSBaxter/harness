@@ -75,8 +75,6 @@ Run inside a freshly created repo. It:
   (`copier update` territory); worth its own spec.
 - **Removing the template repo.** It is the checkout-free creation path.
 - **Fixing the upstream plugin auto-install gap.** This spec works within it.
-- **Checkout-free stealth-identity creation.** A stealth repo must not name
-  `JSBaxter/harness` in a workflow stub, so it needs a different flow.
 - **Replacing the review gate or the ruleset.**
 
 ## Constraints (probed 2026-09-03 from a cloud session)

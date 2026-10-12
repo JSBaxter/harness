@@ -131,6 +131,8 @@ oversight, and the next agent to notice will try to wire it up.
   `claude-review.yml` as unreviewed by construction and give it human eyes.
 - **Not covered:** stealth-identity repos keep self-contained copies of both
   workflows (ADR 0001) and gain nothing from `v1`. They accept drift by design.
+  > **Note (2026-10-12):** the multi-identity mechanism described here was
+  > removed as unused (ADR 0011). One GitHub identity applies.
 - **Revisit trigger:** if moving `v1` gets skipped in practice and the tag drifts
   far behind `main`, it isn't earning its keep — collapse back to `@main` and
   rely on the gate alone rather than keeping a ceremony nobody performs.
