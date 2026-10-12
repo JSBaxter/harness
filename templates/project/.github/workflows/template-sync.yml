@@ -18,10 +18,6 @@
 # template (`templates/project/`) has no such file, so delete this stub
 # there, or render the repository from stem-cell first.
 #
-# IMPORTANT — primary-identity repos ONLY. A stealth-identity repo must NOT
-# reference JSBaxter/* (it would link the accounts in plaintext); it keeps a
-# self-contained copy instead.
-#
 # Pin: a full commit SHA with the branch in a trailing comment (harness ADR
 # 0006). Renovate opens a bump PR here when the harness moves; do not edit the
 # SHA by hand.

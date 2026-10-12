@@ -45,16 +45,6 @@ else
   fi
 fi
 
-# --- identities --------------------------------------------------------------
-mkdir -p "${HOME}/.local/bin"
-ln -sf "$HARNESS_DIR/bin/gh-as" "${HOME}/.local/bin/gh-as"
-say "linked gh-as into ~/.local/bin"
-if [ ! -f "$CLAUDE_DIR/identities.local.json" ]; then
-  cp "$HARNESS_DIR/identities/identities.local.example.json" "$CLAUDE_DIR/identities.local.json"
-  warn "created ~/.claude/identities.local.json with PLACEHOLDER values"
-  warn "fill it in and follow identities/README.md (gitconfig includes + gh logins)"
-fi
-
 # --- plugin marketplace ------------------------------------------------------
 # Registered by GITHUB SOURCE, not local path: every environment (local, cloud,
 # routines) resolves the same pushed marketplace — skills exist when merged,

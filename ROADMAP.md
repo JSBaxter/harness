@@ -1,8 +1,8 @@
 # Harness roadmap
 
 Status as of 2026-08-31. Owner: James. Sequenced by James's priorities:
-real-project shakeout → hands-off cloud → ops polish. Stealth identity is
-parked until needed; observability stays on built-ins by choice.
+real-project shakeout → hands-off cloud → ops polish. Observability stays
+on built-ins by choice.
 
 ## Phase 0 — prerequisites (blocking Phase 1)
 
@@ -63,11 +63,6 @@ Exit criteria: kick off a task from the phone, review the PR next morning.
 
 ## Parked (revisit when triggered)
 
-- **Stealth identity end-to-end** — machinery is deployed and fails closed;
-  activate when stealth work actually starts: fill
-  `~/.claude/identities.local.json` + `~/.config/git/identity-stealth`,
-  `GH_CONFIG_DIR=~/.config/gh-stealth gh auth login`, install the Claude app
-  on that account, test `/new-experiment --identity stealth`
 - **External observability** — trigger: regularly running 5+ concurrent
   agents, or quota surprises the built-ins can't explain
 - **Always-on second machine** — trigger: laptop-closed becoming the

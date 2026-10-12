@@ -68,6 +68,9 @@ the fixture-cell CI) stands.
    harness could be referenced from other repositories' workflows, is no
    longer needed and no longer applied.
 
+   > **Note (2026-10-12):** the multi-identity mechanism described here was
+   > removed as unused (ADR 0011). One GitHub identity applies.
+
 ## Consequences
 
 - The whole executable path of a project's gate and cell workflows now runs
@@ -79,6 +82,8 @@ the fixture-cell CI) stands.
 - One extra checkout per run (a few seconds; the harness is small).
 - Nothing in the harness may be secret from now on. Identities, tokens and
   anything stealth-scoped stay outside this repository, as they already do.
+  > **Note (2026-10-12):** the multi-identity mechanism described here was
+  > removed as unused (ADR 0011). One GitHub identity applies.
 - The `cell-scope.yml` step comment that recorded the `@main` exposure is
   gone. ADR 0006's decision 3 keeps its text, as superseded decisions do,
   and carries a dated note pointing here.

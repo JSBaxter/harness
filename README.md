@@ -62,8 +62,6 @@ else. Every environment resolves the same source:
 | `.github/workflows/template-sync.yml` | Reusable template sync: a cell's scheduled stub calls it; it runs `copier update` against stem-cell in the cell's own Actions and opens one PR on `template-sync` with the version comparison, changed paths, conflicts, owned files and shape notes (stem-cell ADR 0002) |
 | `routines/` | Prompt templates for Claude Code Routines (cloud sessions on GitHub events) |
 | `docs/cloud-capabilities.md` | Verified matrix of what a cloud session, an in-repo workflow and a local session can each do against GitHub |
-| `identities/` | Multi-account machinery: directory = identity; real values live only in local untracked files (see `identities/README.md`) |
-| `bin/gh-as` | Run `gh` pinned to a specific identity's login |
 
 ## The pipeline
 
@@ -109,7 +107,7 @@ else. Every environment resolves the same source:
 
 | Work | Runs | Why |
 |---|---|---|
-| Interactive dev, `/dispatch` fleets, skills-as-commands, hooks enforcement, multi-identity ops, un-sticking a stuck status | **Local** | Only place the plugin loads and the guard hooks bind; only place with `gh` and full git identity control |
+| Interactive dev, `/dispatch` fleets, skills-as-commands, hooks enforcement, un-sticking a stuck status | **Local** | Only place the plugin loads and the guard hooks bind; only place with `gh` and full git control |
 | Fire-and-forget implementation, long tasks, away-from-desk work | **Cloud session** | Configure BOTH the project repo and `JSBaxter/harness`; agent follows skills from source; reports via PR comments; steer from web/phone, `--teleport` to pull down |
 | Event-driven + scheduled agent work (triage, sweeps, reactive fixes) | **Routine** | Cloud session semantics + GitHub/schedule triggers, zero Actions minutes |
 | The review gate (required `claude-review` status) | **Actions, only** | Only the workflow token can write statuses (cloud proxy blocks them — verified) |
